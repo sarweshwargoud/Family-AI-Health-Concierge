@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export const Dashboard: React.FC = () => {
+export const Dashboard: React.FC = () => { 
   const { 
     members, 
     activeMemberId, 
