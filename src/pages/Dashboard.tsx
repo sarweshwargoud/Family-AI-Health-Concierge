@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useFamilyState } from '../context/FamilyStateContext';
 import { 
   Calendar, Pill, Clock, FileText, ShieldAlert, 
-  ArrowRight, Plus, Send, Mic, Sparkles, Check, 
+  ArrowRight, Plus, Send, Mic, Sparkles, Check,
   Heart, Activity, TrendingUp, ChevronRight
 } from 'lucide-react';
 import { motion } from 'framer-motion';
