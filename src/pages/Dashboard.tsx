@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 export const Dashboard: React.FC = () => { 
   const { 
     members, 
-    activeMemberId, 
+    activeMemberId,
     setActiveMemberId, 
     activeMember, 
     appointments,
