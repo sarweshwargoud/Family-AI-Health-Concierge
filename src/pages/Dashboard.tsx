@@ -4,7 +4,7 @@ import { useFamilyState } from '../context/FamilyStateContext';
 import { 
   Calendar, Pill, Clock, FileText, ShieldAlert, 
   ArrowRight, Plus, Send, Mic, Sparkles, Check, 
-  Heart, Activity, TrendingUp, ChevronRight
+  Heart, Activity, TrendingUp, ChevronRigh
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
