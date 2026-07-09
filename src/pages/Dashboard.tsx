@@ -14,7 +14,7 @@ export const Dashboard: React.FC = () => {
     activeMemberId, 
     setActiveMemberId, 
     activeMember, 
-    appointments, 
+    appointments 
     medicationReminders, 
     reports, 
     timelineEvents,
