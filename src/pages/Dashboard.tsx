@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useFamilyState } from '../context/FamilyStateContext';
 import { 
-  Calendar, Pill, Clock, FileText, ShieldAlert, 
+  Calendar, Pill, Clock, FileText, ShieldAlert,
   ArrowRight, Plus, Send, Mic, Sparkles, Check,
   Heart, Activity, TrendingUp, ChevronRight
 } from 'lucide-react';
