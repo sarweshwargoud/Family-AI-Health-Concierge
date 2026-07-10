@@ -4,7 +4,7 @@ A premium, modern, responsive healthcare SaaS web application prototype called *
 .
 ---
 
-## 🌟 Product Vision.
+## 🌟 Product Visio
 
 Medical records are fragmented across hospitals, lab reports, and physical paper prescriptions. During emergencies or routine consults, patient history is often forgotten or slow to find. 
 
