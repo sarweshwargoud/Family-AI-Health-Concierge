@@ -15,6 +15,7 @@ Medical records are fragmented across hospitals, lab reports, and physical paper
 
 ## 🚀 Key Features
 
+
 * **Multi-Member Family Profiles**: Easily toggle the active view between Father, Mother, Daughter, Son, and Grandmother.
 * **Semantic Retrieval AI**: A ChatGPT-style dialog window to query allergies, surgeries, and drug history in plain English.
 * **Document OCR Processor**: Upload scans or blood panels to simulate metadata extraction (tests, doctors, diagnoses, and meds).
