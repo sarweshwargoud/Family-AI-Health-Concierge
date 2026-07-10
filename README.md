@@ -38,6 +38,7 @@ Medical records are fragmented across hospitals, lab reports, and physical paper
 
 ## 📂 Project Structure
 
+
 ```
 src/
 ├── context/         # FamilyStateContext (centralized state, OCR simulator, RAG mock responses)
