@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+
 export const FamilyManagement: React.FC = () => {
   const { members, addMember, activeMemberId, setActiveMemberId } = useFamilyState();
   const [isAddOpen, setIsAddOpen] = useState(false);
