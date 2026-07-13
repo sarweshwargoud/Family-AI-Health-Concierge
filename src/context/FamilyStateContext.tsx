@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 
 
-
 export interface FamilyMember {
   id: string;
   name: string;
