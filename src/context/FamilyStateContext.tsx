@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+
 export interface FamilyMember {
   id: string;
   name: string;
@@ -612,8 +613,8 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const normText = text.toLowerCase();
 
       // Check member name mentioned
-      const mentionedMember = members.find(m => 
-        normText.includes(m.name.toLowerCase()) || 
+      const mentionedMember = members.find(m =>
+        normText.includes(m.name.toLowerCase()) ||
         (m.relation.toLowerCase().includes('father') && (normText.includes('dad') || normText.includes('eshwaraiah'))) ||
         (m.relation.toLowerCase().includes('mother') && (normText.includes('mom') || normText.includes('suvarna'))) ||
         (m.relation.toLowerCase().includes('sister') && (normText.includes('gayathri') || normText.includes('bhuvaneshwari') || normText.includes('sister'))) ||
