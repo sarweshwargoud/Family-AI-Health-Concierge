@@ -2,19 +2,19 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useFamilyState } from '../context/FamilyStateContext';
 import { 
-  Calendar, Pill, Clock, FileText, ShieldAlert, 
-  ArrowRight, Plus, Send, Mic, Sparkles, Check, 
+  Calendar, Pill, Clock, FileText, ShieldAlert,
+  ArrowRight, Plus, Send, Mic, Sparkles, Check,
   Heart, Activity, TrendingUp, ChevronRight
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export const Dashboard: React.FC = () => {
+export const Dashboard: React.FC = () => { 
   const { 
     members, 
-    activeMemberId, 
+    activeMemberId,
     setActiveMemberId, 
     activeMember, 
-    appointments, 
+    appointments,
     medicationReminders, 
     reports, 
     timelineEvents,

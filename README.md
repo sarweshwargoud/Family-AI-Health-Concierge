@@ -1,10 +1,11 @@
 # Family Health Concierge AI
 
 A premium, modern, responsive healthcare SaaS web application prototype called **Family Health Concierge AI**. It securely organizes, indexes, retrieves, and summarizes medical records for an entire family under a single, unified account.
-
+.
 ---
 
-## 🌟 Product Vision
+
+## 🌟 Product Vision.
 
 Medical records are fragmented across hospitals, lab reports, and physical paper prescriptions. During emergencies or routine consults, patient history is often forgotten or slow to find. 
 
@@ -13,6 +14,7 @@ Medical records are fragmented across hospitals, lab reports, and physical paper
 ---
 
 ## 🚀 Key Features
+
 
 * **Multi-Member Family Profiles**: Easily toggle the active view between Father, Mother, Daughter, Son, and Grandmother.
 * **Semantic Retrieval AI**: A ChatGPT-style dialog window to query allergies, surgeries, and drug history in plain English.
@@ -35,6 +37,7 @@ Medical records are fragmented across hospitals, lab reports, and physical paper
 ---
 
 ## 📂 Project Structure
+
 
 ```
 src/
