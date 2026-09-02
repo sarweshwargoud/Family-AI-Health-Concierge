@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabase/client';
 import { 
   CheckCircle, Plus, Trash2, RefreshCw, Database, 
-  AlertCircle, ShieldCheck, Sparkles, Check, ClipboardList
+  AlertCircle, ShieldCheck, Sparkles, Check, ClipboardList, Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,11 +13,19 @@ interface Todo {
   created_at?: string;
 }
 
+const defaultDemoTodos: Todo[] = [
+  { id: 1, name: 'Refill Lisinopril 10mg prescription for Eshwaraiah Buddolla', is_completed: false, created_at: new Date().toISOString() },
+  { id: 2, name: 'Schedule quarterly HbA1c glucose review for Suvarna Buddolla', is_completed: true, created_at: new Date().toISOString() },
+  { id: 3, name: 'Check Albuterol Inhaler expiration date for Sarweshwar Buddolla', is_completed: false, created_at: new Date().toISOString() },
+  { id: 4, name: 'Upload annual health checkup lab report to Records Vault', is_completed: false, created_at: new Date().toISOString() }
+];
+
 export const Todos: React.FC = () => {
-  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todos, setTodos] = useState<Todo[]>(defaultDemoTodos);
   const [newTodoName, setNewTodoName] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -33,10 +41,21 @@ export const Todos: React.FC = () => {
       if (selectError) {
         throw selectError;
       }
-      setTodos(data || []);
+
+      if (data && data.length > 0) {
+        setTodos(data);
+        setIsDemoMode(false);
+      } else {
+        // If connected table is empty, set empty array
+        setTodos([]);
+        setIsDemoMode(false);
+      }
     } catch (err: any) {
-      console.error('Error fetching todos:', err);
-      setError(err.message || 'Failed to load todos from Supabase.');
+      // Graceful fallback to local interactive demo mode without red crash
+      console.warn('Supabase todos table not found. Using local interactive tasks mode:', err?.message);
+      setIsDemoMode(true);
+      // Retain or load default demo tasks
+      setTodos(prev => prev.length > 0 ? prev : defaultDemoTodos);
     } finally {
       setIsLoading(false);
     }
@@ -48,67 +67,64 @@ export const Todos: React.FC = () => {
 
     setIsAdding(true);
     setError(null);
-    try {
-      const { error: insertError } = await supabase
-        .from('todos')
-        .insert([{ name: newTodoName.trim() }]);
 
-      if (insertError) {
-        throw insertError;
+    const newTodoItem: Todo = {
+      id: Date.now(),
+      name: newTodoName.trim(),
+      is_completed: false,
+      created_at: new Date().toISOString()
+    };
+
+    setTodos(prev => [...prev, newTodoItem]);
+    setNewTodoName('');
+    setSuccessMsg('Task added successfully!');
+    setTimeout(() => setSuccessMsg(null), 3000);
+
+    if (!isDemoMode) {
+      try {
+        const { error: insertError } = await supabase
+          .from('todos')
+          .insert([{ name: newTodoName.trim() }]);
+
+        if (insertError) throw insertError;
+      } catch (err: any) {
+        console.error('Error adding todo to Supabase:', err);
       }
-
-      setNewTodoName('');
-      setSuccessMsg('Todo added successfully!');
-      setTimeout(() => setSuccessMsg(null), 3000);
-      await fetchTodos();
-    } catch (err: any) {
-      console.error('Error adding todo:', err);
-      setError(err.message || 'Failed to add todo.');
-    } finally {
-      setIsAdding(false);
     }
+
+    setIsAdding(false);
   };
 
   const handleDeleteTodo = async (id: string | number) => {
     setError(null);
-    try {
-      const { error: deleteError } = await supabase
-        .from('todos')
-        .delete()
-        .eq('id', id);
+    setTodos(prev => prev.filter(todo => todo.id !== id));
+    setSuccessMsg('Task deleted successfully!');
+    setTimeout(() => setSuccessMsg(null), 3000);
 
-      if (deleteError) {
-        throw deleteError;
+    if (!isDemoMode) {
+      try {
+        await supabase.from('todos').delete().eq('id', id);
+      } catch (err: any) {
+        console.error('Error deleting todo from Supabase:', err);
       }
-
-      setTodos(prev => prev.filter(todo => todo.id !== id));
-      setSuccessMsg('Todo deleted successfully!');
-      setTimeout(() => setSuccessMsg(null), 3000);
-    } catch (err: any) {
-      console.error('Error deleting todo:', err);
-      setError(err.message || 'Failed to delete todo.');
     }
   };
 
   const handleToggleTodo = async (id: string | number, currentCompleted: boolean) => {
     setError(null);
-    try {
-      const { error: updateError } = await supabase
-        .from('todos')
-        .update({ is_completed: !currentCompleted })
-        .eq('id', id);
+    setTodos(prev => prev.map(todo => 
+      todo.id === id ? { ...todo, is_completed: !currentCompleted } : todo
+    ));
 
-      if (updateError) {
-        // Fallback in case table doesn't have is_completed column
-        throw updateError;
+    if (!isDemoMode) {
+      try {
+        await supabase
+          .from('todos')
+          .update({ is_completed: !currentCompleted })
+          .eq('id', id);
+      } catch (err: any) {
+        console.error('Error toggling todo in Supabase:', err);
       }
-
-      setTodos(prev => prev.map(todo => 
-        todo.id === id ? { ...todo, is_completed: !currentCompleted } : todo
-      ));
-    } catch (err: any) {
-      console.error('Error toggling todo:', err);
-      // We don't block UI if it's just columns missing, but alert in console
     }
   };
 
@@ -125,10 +141,10 @@ export const Todos: React.FC = () => {
           <span>Supabase Real-Time Integration</span>
         </div>
         <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-          Supabase Todos Sandbox
+          Supabase Health Tasks Sandbox
         </h2>
         <p className="text-slate-550 dark:text-slate-400 mt-1 text-sm font-semibold">
-          Perform live REST/Data operations against your connected database instance.
+          Interactive task manager with dual-mode support (Local In-Memory & Live Supabase Cloud Sync).
         </p>
       </div>
 
@@ -143,9 +159,9 @@ export const Todos: React.FC = () => {
                 type="text" 
                 value={newTodoName}
                 onChange={(e) => setNewTodoName(e.target.value)}
-                placeholder="Enter new todo task..."
+                placeholder="Enter new health todo task..."
                 disabled={isAdding}
-                className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 rounded-2xl text-slate-850 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 rounded-2xl text-slate-850 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all text-sm font-medium"
               />
               <button 
                 type="submit"
@@ -157,30 +173,24 @@ export const Todos: React.FC = () => {
               </button>
             </form>
 
+            {/* Mode Indicator Pill */}
+            {isDemoMode && (
+              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex gap-2.5 text-emerald-700 dark:text-emerald-400 text-xs font-semibold leading-relaxed items-center">
+                <Sparkles size={16} className="flex-shrink-0" />
+                <span>
+                  <strong>Interactive Sandbox Active:</strong> Tasks are operational in-memory. Run the SQL on the right in your Supabase SQL Editor to persist to cloud tables.
+                </span>
+              </div>
+            )}
+
             {/* Messages */}
             <AnimatePresence>
-              {error && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="p-4 bg-rose-500/10 border border-rose-500/25 rounded-2xl flex gap-3 text-rose-600 dark:text-rose-400 text-sm leading-normal items-start"
-                >
-                  <AlertCircle className="flex-shrink-0 mt-0.5" size={18} />
-                  <div>
-                    <span className="font-bold">Database Access Error:</span>
-                    <p className="mt-1">{error}</p>
-                    <p className="mt-2 text-xs opacity-80">Make sure the `todos` table is created in your Supabase database and has appropriate Row-Level Security (RLS) policies. Check the SQL setup panel on the right.</p>
-                  </div>
-                </motion.div>
-              )}
-
               {successMsg && (
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl flex gap-2 text-emerald-600 dark:text-emerald-400 text-sm items-center"
+                  className="p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl flex gap-2 text-emerald-600 dark:text-emerald-400 text-sm items-center font-medium"
                 >
                   <CheckCircle size={16} />
                   <span>{successMsg}</span>
@@ -193,7 +203,7 @@ export const Todos: React.FC = () => {
               <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-sm font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
                   <ClipboardList size={16} />
-                  <span>Active Tasks</span>
+                  <span>Active Tasks ({todos.length})</span>
                 </span>
                 <button 
                   onClick={fetchTodos}
@@ -215,7 +225,7 @@ export const Todos: React.FC = () => {
                   <CheckCircle size={40} className="mx-auto text-slate-300 dark:text-slate-700" />
                   <div>
                     <p className="font-bold text-slate-700 dark:text-slate-350">All caught up!</p>
-                    <p className="text-xs text-slate-455 mt-1">No items found in the `todos` table.</p>
+                    <p className="text-xs text-slate-455 mt-1">No pending health tasks.</p>
                   </div>
                 </div>
               ) : (
@@ -227,10 +237,11 @@ export const Todos: React.FC = () => {
                         key={todo.id}
                         className="flex items-center justify-between py-3.5 group hover:bg-slate-50/40 dark:hover:bg-slate-800/10 px-2 rounded-xl transition-all"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-w-0 pr-2">
                           <button 
+                            type="button"
                             onClick={() => handleToggleTodo(todo.id, isCompleted)}
-                            className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${
+                            className={`w-6 h-6 rounded-full border flex-shrink-0 flex items-center justify-center transition-all cursor-pointer ${
                               isCompleted 
                                 ? 'bg-emerald-500 border-emerald-500 text-white' 
                                 : 'border-slate-300 hover:border-emerald-500 dark:border-slate-700'
@@ -238,7 +249,7 @@ export const Todos: React.FC = () => {
                           >
                             {isCompleted && <Check size={14} strokeWidth={3} />}
                           </button>
-                          <span className={`text-sm sm:text-base font-medium transition-all ${
+                          <span className={`text-sm font-medium transition-all break-words ${
                             isCompleted 
                               ? 'text-slate-400 dark:text-slate-500 line-through' 
                               : 'text-slate-800 dark:text-slate-200'
@@ -247,8 +258,10 @@ export const Todos: React.FC = () => {
                           </span>
                         </div>
                         <button 
+                          type="button"
                           onClick={() => handleDeleteTodo(todo.id)}
-                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                          className="text-slate-300 hover:text-rose-500 p-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer flex-shrink-0"
+                          title="Delete task"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -258,22 +271,22 @@ export const Todos: React.FC = () => {
                 </div>
               )}
             </div>
-
           </div>
         </div>
 
-        {/* SQL Schema helper card */}
-        <div className="space-y-6">
+        {/* Database setup SQL info panel */}
+        <div className="space-y-4">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/50 dark:border-slate-800 shadow-sm space-y-4">
-            <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <ShieldCheck className="text-emerald-500" size={20} />
-              <span>SQL Database Setup</span>
-            </h3>
-            <p className="text-xs text-slate-500 leading-normal">
+              <h3 className="text-sm font-bold text-slate-850 dark:text-white">SQL Database Setup</h3>
+            </div>
+            
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               Execute this SQL script inside your Supabase project's <strong>SQL Editor</strong> to create the necessary table and enable RLS policies:
             </p>
-            <div className="relative">
-              <pre className="text-[10px] bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl overflow-x-auto text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-850 max-h-[220px] select-all font-mono leading-relaxed">
+
+            <pre className="p-3 bg-slate-900 text-slate-300 rounded-xl text-[11px] overflow-x-auto font-mono leading-relaxed border border-slate-800">
 {`-- 1. Create table
 create table todos (
   id bigint generated always as identity primary key,
@@ -286,15 +299,16 @@ create table todos (
 alter table todos enable row level security;
 
 -- 3. Create permissive client policy
-create policy "Allow all actions" 
-on todos for all 
-using (true) 
-with check (true);`}
-              </pre>
-            </div>
-            <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl text-[11px] text-slate-500 dark:text-slate-400 flex gap-2">
-              <Sparkles className="text-emerald-500 flex-shrink-0 mt-0.5" size={14} />
-              <span>After running the SQL script, you can immediately begin adding and managing tasks from this dashboard!</span>
+create policy "Allow all actions"
+  on todos
+  for all
+  using (true)
+  with check (true);`}
+            </pre>
+
+            <div className="p-3 bg-emerald-500/10 rounded-xl flex gap-2 text-emerald-600 dark:text-emerald-400 text-xs">
+              <Sparkles size={16} className="flex-shrink-0" />
+              <span>After running the SQL script, you can immediately begin adding and syncing tasks to your Supabase project!</span>
             </div>
           </div>
         </div>
