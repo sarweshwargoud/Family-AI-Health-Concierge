@@ -102,6 +102,8 @@ interface FamilyStateContextType {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   addMember: (member: Omit<FamilyMember, 'id'>) => Promise<void>;
+  updateMember: (id: string, updatedData: Partial<FamilyMember>) => Promise<void>;
+  deleteMember: (id: string) => Promise<void>;
   uploadReport: (report: Omit<MedicalReport, 'id'>) => Promise<void>;
   toggleMedication: (reminderId: string, time: 'Morning' | 'Afternoon' | 'Night') => Promise<void>;
   addAppointment: (appointment: Omit<Appointment, 'id'>) => Promise<void>;
@@ -729,6 +731,86 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
+  const updateMember = async (id: string, updatedData: Partial<FamilyMember>) => {
+    // Optimistic UI state update
+    setMembers(prev => prev.map(m => m.id === id ? { ...m, ...updatedData } : m));
+
+    const notifItem = {
+      id: `n${Date.now()}`,
+      title: 'Member Profile Updated',
+      message: `Medical file for ${updatedData.name || 'family member'} has been updated.`,
+      date: new Date().toISOString().split('T')[0],
+      read: false,
+      type: 'member'
+    };
+    setNotifications(prev => [notifItem, ...prev]);
+
+    if (user) {
+      try {
+        const payload: any = {};
+        if (updatedData.name !== undefined) payload.name = updatedData.name;
+        if (updatedData.relation !== undefined) payload.relation = updatedData.relation;
+        if (updatedData.age !== undefined) payload.age = updatedData.age;
+        if (updatedData.dob !== undefined) payload.dob = updatedData.dob;
+        if (updatedData.gender !== undefined) payload.gender = updatedData.gender;
+        if (updatedData.bloodGroup !== undefined) payload.blood_group = updatedData.bloodGroup;
+        if (updatedData.insuranceProvider !== undefined) payload.insurance_provider = updatedData.insuranceProvider;
+        if (updatedData.insuranceId !== undefined) payload.insurance_id = updatedData.insuranceId;
+        if (updatedData.allergies !== undefined) payload.allergies = updatedData.allergies;
+        if (updatedData.chronicDiseases !== undefined) payload.chronic_diseases = updatedData.chronicDiseases;
+        if (updatedData.currentMedications !== undefined) payload.current_medications = updatedData.currentMedications;
+        if (updatedData.height !== undefined) payload.height = updatedData.height;
+        if (updatedData.weight !== undefined) payload.weight = updatedData.weight;
+        if (updatedData.avatar !== undefined) payload.avatar = updatedData.avatar;
+        if (updatedData.emergencyContact !== undefined) payload.emergency_contact = updatedData.emergencyContact;
+        if (updatedData.vaccinations !== undefined) payload.vaccinations = updatedData.vaccinations;
+        payload.updated_at = new Date().toISOString();
+
+        await supabase
+          .from('family_members')
+          .update(payload)
+          .eq('id', id)
+          .eq('user_id', user.id);
+      } catch (err) {
+        console.error('Error updating family member in Supabase:', err);
+      }
+    }
+  };
+
+  const deleteMember = async (id: string) => {
+    // Optimistic UI state removal
+    const memberToDelete = members.find(m => m.id === id);
+    setMembers(prev => {
+      const filtered = prev.filter(m => m.id !== id);
+      if (activeMemberId === id && filtered.length > 0) {
+        setActiveMemberId(filtered[0].id);
+      }
+      return filtered;
+    });
+
+    const notifItem = {
+      id: `n${Date.now()}`,
+      title: 'Member Removed',
+      message: `${memberToDelete?.name || 'Member'} was removed from your family space.`,
+      date: new Date().toISOString().split('T')[0],
+      read: false,
+      type: 'member'
+    };
+    setNotifications(prev => [notifItem, ...prev]);
+
+    if (user) {
+      try {
+        await supabase
+          .from('family_members')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', user.id);
+      } catch (err) {
+        console.error('Error deleting family member in Supabase:', err);
+      }
+    }
+  };
+
   const uploadReport = async (report: Omit<MedicalReport, 'id'>) => {
     const reportId = `r${Date.now()}`;
     const newReport: MedicalReport = { id: reportId, ...report };
@@ -1045,6 +1127,8 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
         isDarkMode,
         toggleDarkMode,
         addMember,
+        updateMember,
+        deleteMember,
         uploadReport,
         toggleMedication,
         addAppointment,

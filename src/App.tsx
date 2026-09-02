@@ -14,6 +14,7 @@ import { UploadReport } from './pages/UploadReport';
 import { FamilyManagement } from './pages/FamilyManagement';
 import { EmergencySummary } from './pages/EmergencySummary';
 import { Todos } from './pages/Todos';
+import { AuthCallback } from './pages/AuthCallback';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <DashboardLayout>{children}</DashboardLayout>;
@@ -24,10 +25,11 @@ function App() {
     <FamilyStateProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Routing */}
+          {/* Public & OAuth Routing */}
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
 
           {/* Secure Workspace Routing */}
           <Route 
