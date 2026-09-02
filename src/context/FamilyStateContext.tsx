@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
+import { supabase } from '../utils/supabase/client';
+import type { User } from '@supabase/supabase-js';
+import { checkAndSeedUserData } from '../utils/supabase/seed';
 
 export interface FamilyMember {
   id: string;
@@ -50,7 +52,6 @@ export interface TimelineEvent {
   icon: string;
 }
 
-
 export interface MedicationReminder {
   id: string;
   memberId: string;
@@ -86,6 +87,9 @@ export interface ChatMessage {
 }
 
 interface FamilyStateContextType {
+  user: User | null;
+  loading: boolean;
+  logout: () => Promise<void>;
   members: FamilyMember[];
   activeMemberId: string;
   activeMember: FamilyMember;
@@ -97,19 +101,18 @@ interface FamilyStateContextType {
   chatMessages: ChatMessage[];
   isDarkMode: boolean;
   toggleDarkMode: () => void;
-  addMember: (member: Omit<FamilyMember, 'id'>) => void;
-  uploadReport: (report: Omit<MedicalReport, 'id'>) => void;
-  toggleMedication: (reminderId: string, time: 'Morning' | 'Afternoon' | 'Night') => void;
-  addAppointment: (appointment: Omit<Appointment, 'id'>) => void;
-  askAI: (text: string) => void;
-  clearChat: () => void;
+  addMember: (member: Omit<FamilyMember, 'id'>) => Promise<void>;
+  uploadReport: (report: Omit<MedicalReport, 'id'>) => Promise<void>;
+  toggleMedication: (reminderId: string, time: 'Morning' | 'Afternoon' | 'Night') => Promise<void>;
+  addAppointment: (appointment: Omit<Appointment, 'id'>) => Promise<void>;
+  askAI: (text: string) => Promise<void>;
+  clearChat: () => Promise<void>;
   notifications: { id: string; title: string; message: string; date: string; read: boolean; type: string }[];
-  markNotificationsAsRead: () => void;
+  markNotificationsAsRead: () => Promise<void>;
 }
 
-const FamilyStateContext = createContext<FamilyStateContextType | undefined>(undefined);
-
-const initialMembers: FamilyMember[] = [
+// Initial Buddolla Mock Data for Guest / Demo Mode
+const demoMembers: FamilyMember[] = [
   {
     id: 'm1',
     name: 'Eshwaraiah Buddolla',
@@ -211,87 +214,85 @@ const initialMembers: FamilyMember[] = [
     insuranceId: 'SHI-99281-95',
     allergies: ['None'],
     chronicDiseases: ['Atopic Dermatitis (Eczema)'],
-    currentMedications: ['Hydrocortisone 1% cream (Topical as needed)'],
+    currentMedications: ['Hydrocortisone Topical Cream (As needed)'],
     height: "158 cm",
-    weight: "52 kg",
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
+    weight: "50 kg",
+    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
     emergencyContact: { name: 'Eshwaraiah Buddolla', relation: 'Father', phone: '+91 98765 43210' },
     vaccinations: [
       { name: 'Flu Vaccine', date: '2025-10-18', status: 'Completed' },
-      { name: 'DTaP Vaccine', date: '2023-11-05', status: 'Completed' },
-      { name: 'Varicella (Chickenpox)', date: '2024-02-12', status: 'Completed' }
+      { name: 'Hepatitis B Booster', date: '2024-03-10', status: 'Completed' }
     ]
   }
 ];
 
-const initialReports: MedicalReport[] = [
+const demoReports: MedicalReport[] = [
   {
     id: 'r1',
     memberId: 'm1',
-    title: 'Annual Blood Work Panel',
-    date: '2025-11-20',
+    title: 'Comprehensive Metabolic & Lipid Panel',
+    date: '2026-05-14',
     category: 'Blood Test',
-    hospital: 'Metro Health Diagnostics',
+    hospital: 'Metro Medical Center Group',
     doctor: 'Dr. Evelyn Martinez',
-    summary: 'Standard lipid profile and metabolic screen. Total cholesterol was 215 mg/dL (slightly elevated). HbA1c is normal at 5.4%. Creatinine and liver enzymes are within normal reference range. Recommended continuing current low-dose Atorvastatin and diet modification.',
+    summary: 'Blood chemistry panel. Elevated Total Cholesterol (210 mg/dL) and LDL (130 mg/dL). Liver and kidney function normal.',
     extractedData: {
       diseases: ['Mild Hypercholesterolemia'],
       medications: ['Atorvastatin 20mg'],
       values: {
-        'Total Cholesterol': '215 mg/dL',
-        'LDL Cholesterol': '132 mg/dL',
-        'HDL Cholesterol': '52 mg/dL',
-        'Triglycerides': '155 mg/dL',
-        'HbA1c': '5.4%'
+        'Total Cholesterol': '210 mg/dL',
+        'LDL Cholesterol': '130 mg/dL',
+        'HDL Cholesterol': '48 mg/dL',
+        'Fasting Glucose': '94 mg/dL'
       }
     },
-    fileSize: '1.8 MB',
+    fileSize: '1.4 MB',
     fileType: 'PDF'
   },
   {
     id: 'r2',
     memberId: 'm2',
-    title: 'HbA1c & Blood Glucose Log',
-    date: '2026-03-15',
+    title: 'HbA1c & Fasting Glucose Glycemic Profile',
+    date: '2026-06-02',
     category: 'Blood Test',
-    hospital: 'Senior Care Associates',
-    doctor: 'Dr. Alan Vance (Endocrinologist)',
-    summary: 'Routine review of diabetes control. HbA1c level measured at 7.1%, which indicates acceptable control but room for improvement. Kidney profiles are stable. Doctor recommended increasing Metformin dosage if fasting blood sugar remains consistently above 140 mg/dL.',
+    hospital: 'Metro Endocrine Specialty Clinic',
+    doctor: 'Dr. Alan Vance',
+    summary: 'Quarterly diabetic monitoring. HbA1c at 6.8% (improved from 7.4%). Fasting glucose at 128 mg/dL. Metformin therapy effective.',
     extractedData: {
       diseases: ['Type 2 Diabetes Mellitus'],
       medications: ['Metformin 500mg', 'Glipizide 5mg'],
       values: {
-        'HbA1c': '7.1%',
-        'Fasting Blood Glucose': '138 mg/dL',
-        'eGFR': '74 mL/min/1.73m²'
+        'HbA1c': '6.8%',
+        'Fasting Glucose': '128 mg/dL',
+        'eGFR': '>90 mL/min'
       }
     },
-    fileSize: '1.2 MB',
+    fileSize: '2.1 MB',
     fileType: 'PDF'
   },
   {
     id: 'r3',
     memberId: 'm4',
-    title: 'Pulmonary Function Spirometry Report',
-    date: '2025-06-12',
-    category: 'Other',
-    hospital: 'Pediatric Allergy & Asthma Clinic',
+    title: 'Pulmonary Function & Spirometry Test',
+    date: '2026-04-18',
+    category: 'Prescription',
+    hospital: 'Allergy and Immunology Associates',
     doctor: 'Dr. Sandra Reynolds',
-    summary: 'Spirometry test shows FEV1/FVC ratio is 78%. Mild obstruction noted which resolves post-bronchodilator inhalation (+14% improvement). Clinically diagnostic of mild extrinsic asthma. Instructed to maintain daily steroid inhaler and use rescue inhaler on exertion.',
+    summary: 'Mild bronchial constriction observed during allergen challenge. FEV1/FVC ratio 76%. Continue daily inhaled corticosteroid control.',
     extractedData: {
       diseases: ['Mild Asthma'],
-      medications: ['Fluticasone Propionate', 'Albuterol Inhaler'],
+      medications: ['Albuterol Inhaler', 'Fluticasone Propionate'],
       values: {
-        'FEV1/FVC': '78%',
-        'Reversibility': '14%'
+        'FEV1': '82% Predicted',
+        'FEV1/FVC': '76%'
       }
     },
-    fileSize: '2.4 MB',
+    fileSize: '950 KB',
     fileType: 'PDF'
   }
 ];
 
-const initialTimeline: TimelineEvent[] = [
+const demoTimeline: TimelineEvent[] = [
   {
     id: 't1',
     memberId: 'm1',
@@ -299,7 +300,7 @@ const initialTimeline: TimelineEvent[] = [
     year: '2021',
     title: 'Hypertension Diagnosis',
     type: 'diagnosis',
-    description: 'Diagnosed with Primary Essential Hypertension after multiple high readings. Prescribed Lisinopril 10mg daily.',
+    description: 'Diagnosed with Primary Essential Hypertension. Prescribed Lisinopril 10mg daily.',
     icon: 'activity'
   },
   {
@@ -309,7 +310,7 @@ const initialTimeline: TimelineEvent[] = [
     year: '2024',
     title: 'High Cholesterol Diagnosed',
     type: 'diagnosis',
-    description: 'Routine blood screening showed elevated LDL cholesterol (145 mg/dL). Started Atorvastatin 20mg daily.',
+    description: 'Screening showed elevated LDL cholesterol (145 mg/dL). Started Atorvastatin 20mg daily.',
     icon: 'heart'
   },
   {
@@ -319,7 +320,7 @@ const initialTimeline: TimelineEvent[] = [
     year: '2018',
     title: 'Total Left Knee Replacement',
     type: 'surgery',
-    description: 'Performed at Metro Orthopedic Center by Dr. Keith Thomas. Uncomplicated recovery with 8 weeks of physical therapy.',
+    description: 'Performed at Metro Orthopedic Center. Full recovery with 8 weeks of physical therapy.',
     icon: 'wrench'
   },
   {
@@ -329,7 +330,7 @@ const initialTimeline: TimelineEvent[] = [
     year: '2020',
     title: 'Type 2 Diabetes Diagnosed',
     type: 'diagnosis',
-    description: 'Diagnosed following standard glucose tolerance test. Initial HbA1c was 8.2%. Prescribed Metformin 500mg twice daily and active exercise plan.',
+    description: 'Diagnosed following glucose tolerance test. Initial HbA1c 8.2%. Prescribed Metformin 500mg twice daily.',
     icon: 'activity'
   },
   {
@@ -339,12 +340,12 @@ const initialTimeline: TimelineEvent[] = [
     year: '2022',
     title: 'Asthma Diagnosis',
     type: 'diagnosis',
-    description: 'Diagnosed following acute bronchial spasm event triggered by seasonal dander. Prescribed Albuterol rescue inhaler and Fluticasone control.',
+    description: 'Diagnosed following acute bronchial spasm event. Prescribed Albuterol rescue inhaler and Fluticasone control.',
     icon: 'wind'
   }
 ];
 
-const initialReminders: MedicationReminder[] = [
+const demoReminders: MedicationReminder[] = [
   {
     id: 'rem1',
     memberId: 'm1',
@@ -392,7 +393,7 @@ const initialReminders: MedicationReminder[] = [
   }
 ];
 
-const initialAppointments: Appointment[] = [
+const demoAppointments: Appointment[] = [
   {
     id: 'a1',
     memberId: 'm1',
@@ -423,12 +424,12 @@ const initialAppointments: Appointment[] = [
     hospital: 'Allergy and Immunology Associates',
     date: '2026-07-12',
     time: '11:15 AM',
-    notes: 'Follow-up for seasonal asthma control. Check inhaler inhalation technique and pulmonary health.',
+    notes: 'Follow-up for seasonal asthma control. Check inhaler technique and pulmonary health.',
     status: 'Upcoming'
   }
 ];
 
-const initialNotifications = [
+const demoNotifications = [
   {
     id: 'n1',
     title: 'Upcoming Appointment',
@@ -455,7 +456,7 @@ const initialNotifications = [
   }
 ];
 
-const defaultChatHistory: ChatMessage[] = [
+const demoChatHistory: ChatMessage[] = [
   {
     id: 'c1',
     sender: 'assistant',
@@ -464,21 +465,150 @@ const defaultChatHistory: ChatMessage[] = [
   }
 ];
 
+const FamilyStateContext = createContext<FamilyStateContextType | undefined>(undefined);
+
 export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [members, setMembers] = useState<FamilyMember[]>(initialMembers);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [members, setMembers] = useState<FamilyMember[]>(demoMembers);
   const [activeMemberId, setActiveMemberId] = useState<string>('m1');
-  const [reports, setReports] = useState<MedicalReport[]>(initialReports);
-  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(initialTimeline);
-  const [medicationReminders, setMedicationReminders] = useState<MedicationReminder[]>(initialReminders);
-  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(defaultChatHistory);
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [reports, setReports] = useState<MedicalReport[]>(demoReports);
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(demoTimeline);
+  const [medicationReminders, setMedicationReminders] = useState<MedicationReminder[]>(demoReminders);
+  const [appointments, setAppointments] = useState<Appointment[]>(demoAppointments);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(demoChatHistory);
+  const [notifications, setNotifications] = useState<any[]>(demoNotifications);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
-  const activeMember = members.find(m => m.id === activeMemberId) || members[0];
+  const activeMember = members.find(m => m.id === activeMemberId) || members[0] || demoMembers[0];
+
+  const handleUserSession = async (currentUser: User) => {
+    try {
+      await checkAndSeedUserData(currentUser.id);
+
+      const [
+        { data: dbMembers },
+        { data: dbReports },
+        { data: dbTimeline },
+        { data: dbReminders },
+        { data: dbAppointments },
+        { data: dbNotifications },
+        { data: dbChat }
+      ] = await Promise.all([
+        supabase.from('family_members').select('*').eq('user_id', currentUser.id),
+        supabase.from('medical_reports').select('*').eq('user_id', currentUser.id),
+        supabase.from('timeline_events').select('*').eq('user_id', currentUser.id),
+        supabase.from('medication_reminders').select('*').eq('user_id', currentUser.id),
+        supabase.from('appointments').select('*').eq('user_id', currentUser.id),
+        supabase.from('notifications').select('*').eq('user_id', currentUser.id),
+        supabase.from('chat_messages').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true })
+      ]);
+
+      if (dbMembers && dbMembers.length > 0) {
+        setMembers(dbMembers.map(m => ({
+          id: m.id,
+          name: m.name,
+          relation: m.relation,
+          age: m.age,
+          dob: m.dob,
+          gender: m.gender,
+          bloodGroup: m.blood_group,
+          insuranceProvider: m.insurance_provider,
+          insuranceId: m.insurance_id,
+          allergies: m.allergies || [],
+          chronicDiseases: m.chronic_diseases || [],
+          currentMedications: m.current_medications || [],
+          height: m.height || '',
+          weight: m.weight || '',
+          avatar: m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          emergencyContact: m.emergency_contact || { name: '', relation: '', phone: '' },
+          vaccinations: m.vaccinations || []
+        })));
+        setActiveMemberId(dbMembers[0].id);
+      }
+
+      if (dbReports && dbReports.length > 0) {
+        setReports(dbReports.map(r => ({
+          id: r.id,
+          memberId: r.member_id,
+          title: r.title,
+          date: r.date,
+          category: r.category,
+          hospital: r.hospital,
+          doctor: r.doctor,
+          summary: r.summary,
+          extractedData: r.extracted_data || { diseases: [], medications: [] },
+          fileSize: r.file_size || '1 MB',
+          fileType: r.file_type || 'PDF'
+        })));
+      }
+
+      if (dbTimeline && dbTimeline.length > 0) {
+        setTimelineEvents(dbTimeline.map(t => ({
+          id: t.id,
+          memberId: t.member_id,
+          date: t.date,
+          year: t.year,
+          title: t.title,
+          type: t.type,
+          description: t.description,
+          icon: t.icon
+        })));
+      }
+
+      if (dbReminders && dbReminders.length > 0) {
+        setMedicationReminders(dbReminders.map(rem => ({
+          id: rem.id,
+          memberId: rem.member_id,
+          medicine: rem.medicine,
+          dosage: rem.dosage,
+          frequency: rem.frequency,
+          timing: rem.timing,
+          taken: rem.taken || {}
+        })));
+      }
+
+      if (dbAppointments && dbAppointments.length > 0) {
+        setAppointments(dbAppointments.map(a => ({
+          id: a.id,
+          memberId: a.member_id,
+          doctor: a.doctor,
+          specialty: a.specialty,
+          hospital: a.hospital,
+          date: a.date,
+          time: a.time,
+          notes: a.notes,
+          status: a.status
+        })));
+      }
+
+      if (dbNotifications && dbNotifications.length > 0) {
+        setNotifications(dbNotifications.map(n => ({
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          date: n.date,
+          read: n.read,
+          type: n.type
+        })));
+      }
+
+      if (dbChat && dbChat.length > 0) {
+        setChatMessages(dbChat.map(c => ({
+          id: c.id,
+          sender: c.sender,
+          text: c.text,
+          timestamp: c.timestamp,
+          attachments: c.attachments,
+          clinicalCards: c.clinical_cards
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching database records:', err);
+    }
+  };
 
   useEffect(() => {
-    // Check local storage for theme preference
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
       setIsDarkMode(true);
@@ -487,6 +617,47 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsDarkMode(false);
       document.body.classList.remove('dark');
     }
+
+    const getInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          await handleUserSession(currentUser);
+        }
+      } catch (err) {
+        console.error('Session retrieval error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getInitialSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        setLoading(true);
+        await handleUserSession(currentUser);
+        setLoading(false);
+      } else {
+        // Restore demo mock data on sign out
+        setMembers(demoMembers);
+        setActiveMemberId('m1');
+        setReports(demoReports);
+        setTimelineEvents(demoTimeline);
+        setMedicationReminders(demoReminders);
+        setAppointments(demoAppointments);
+        setChatMessages(demoChatHistory);
+        setNotifications(demoNotifications);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const toggleDarkMode = () => {
@@ -503,29 +674,65 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   };
 
-  const addMember = (member: Omit<FamilyMember, 'id'>) => {
-    const id = `m${Date.now()}`;
-    const newMember: FamilyMember = { ...member, id };
+  const addMember = async (member: Omit<FamilyMember, 'id'>) => {
+    const newId = `m${Date.now()}`;
+    const newMember: FamilyMember = { id: newId, ...member };
+
     setMembers(prev => [...prev, newMember]);
-    setNotifications(prev => [
-      {
-        id: `n${Date.now()}`,
-        title: 'New Member Added',
-        message: `${member.name} has been added as a family member (${member.relation}).`,
-        date: new Date().toISOString().split('T')[0],
-        read: false,
-        type: 'member'
-      },
-      ...prev
-    ]);
+    if (!activeMemberId) {
+      setActiveMemberId(newId);
+    }
+
+    const notifItem = {
+      id: `n${Date.now()}`,
+      title: 'New Member Added',
+      message: `${member.name} has been added as a family member (${member.relation}).`,
+      date: new Date().toISOString().split('T')[0],
+      read: false,
+      type: 'member'
+    };
+    setNotifications(prev => [notifItem, ...prev]);
+
+    if (user) {
+      try {
+        await supabase.from('family_members').insert([{
+          user_id: user.id,
+          name: member.name,
+          relation: member.relation,
+          age: member.age,
+          dob: member.dob,
+          gender: member.gender,
+          blood_group: member.bloodGroup,
+          insurance_provider: member.insuranceProvider,
+          insurance_id: member.insuranceId,
+          allergies: member.allergies,
+          chronic_diseases: member.chronicDiseases,
+          current_medications: member.currentMedications,
+          height: member.height,
+          weight: member.weight,
+          avatar: member.avatar,
+          emergency_contact: member.emergencyContact,
+          vaccinations: member.vaccinations
+        }]);
+
+        await supabase.from('notifications').insert([{
+          user_id: user.id,
+          title: notifItem.title,
+          message: notifItem.message,
+          date: notifItem.date,
+          read: false,
+          type: 'member'
+        }]);
+      } catch (err) {
+        console.error('Error adding member to Supabase:', err);
+      }
+    }
   };
 
-  const uploadReport = (report: Omit<MedicalReport, 'id'>) => {
-    const id = `r${Date.now()}`;
-    const newReport: MedicalReport = { ...report, id };
-    setReports(prev => [newReport, ...prev]);
+  const uploadReport = async (report: Omit<MedicalReport, 'id'>) => {
+    const reportId = `r${Date.now()}`;
+    const newReport: MedicalReport = { id: reportId, ...report };
 
-    // Automatically append to Timeline
     const newTimeline: TimelineEvent = {
       id: `t${Date.now()}`,
       memberId: report.memberId,
@@ -536,83 +743,179 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
       description: `Uploaded document: ${report.category} from ${report.hospital} under ${report.doctor}.`,
       icon: 'file'
     };
-    setTimelineEvents(prev => [newTimeline, ...prev]);
 
-    // Trigger Notification
-    setNotifications(prev => [
-      {
-        id: `n${Date.now()}`,
-        title: 'OCR Parsing Complete',
-        message: `Successfully processed "${report.title}" for ${members.find(m => m.id === report.memberId)?.name || 'member'}.`,
-        date: new Date().toISOString().split('T')[0],
-        read: false,
-        type: 'upload'
-      },
-      ...prev
-    ]);
-  };
-
-  const toggleMedication = (reminderId: string, time: 'Morning' | 'Afternoon' | 'Night') => {
-    const dateKey = new Date().toISOString().split('T')[0];
-    setMedicationReminders(prev =>
-      prev.map(rem => {
-        if (rem.id === reminderId) {
-          const currentTaken = rem.taken[dateKey] || {};
-          const isTaken = !!currentTaken[time];
-          return {
-            ...rem,
-            taken: {
-              ...rem.taken,
-              [dateKey]: {
-                ...currentTaken,
-                [time]: !isTaken
-              }
-            }
-          };
-        }
-        return rem;
-      })
-    );
-  };
-
-  const addAppointment = (appointment: Omit<Appointment, 'id'>) => {
-    const id = `a${Date.now()}`;
-    const newAppointment: Appointment = { ...appointment, id, status: 'Upcoming' };
-    setAppointments(prev => [...prev, newAppointment]);
-
-    // Add notification
-    setNotifications(prev => [
-      {
-        id: `n${Date.now()}`,
-        title: 'Appointment Scheduled',
-        message: `Appointment scheduled for ${members.find(m => m.id === appointment.memberId)?.name} with ${appointment.doctor}.`,
-        date: new Date().toISOString().split('T')[0],
-        read: false,
-        type: 'appointment'
-      },
-      ...prev
-    ]);
-  };
-
-  const askAI = (text: string) => {
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const userMsg: ChatMessage = {
-      id: `c_u_${Date.now()}`,
-      sender: 'user',
-      text,
-      timestamp: timeStr
+    const memberName = members.find(m => m.id === report.memberId)?.name || 'member';
+    const notifItem = {
+      id: `n${Date.now()}`,
+      title: 'OCR Parsing Complete',
+      message: `Successfully processed "${report.title}" for ${memberName}.`,
+      date: new Date().toISOString().split('T')[0],
+      read: false,
+      type: 'upload'
     };
 
-    setChatMessages(prev => [...prev, userMsg]);
+    setReports(prev => [newReport, ...prev]);
+    setTimelineEvents(prev => [newTimeline, ...prev]);
+    setNotifications(prev => [notifItem, ...prev]);
 
-    // Simulate AI response
-    setTimeout(() => {
+    if (user) {
+      try {
+        await supabase.from('medical_reports').insert([{
+          user_id: user.id,
+          member_id: report.memberId,
+          title: report.title,
+          date: report.date,
+          category: report.category,
+          hospital: report.hospital,
+          doctor: report.doctor,
+          summary: report.summary,
+          extracted_data: report.extractedData,
+          file_size: report.fileSize,
+          file_type: report.fileType
+        }]);
+
+        await supabase.from('timeline_events').insert([{
+          user_id: user.id,
+          member_id: report.memberId,
+          date: newTimeline.date,
+          year: newTimeline.year,
+          title: newTimeline.title,
+          type: 'report',
+          description: newTimeline.description,
+          icon: newTimeline.icon
+        }]);
+
+        await supabase.from('notifications').insert([{
+          user_id: user.id,
+          title: notifItem.title,
+          message: notifItem.message,
+          date: notifItem.date,
+          read: false,
+          type: 'upload'
+        }]);
+      } catch (err) {
+        console.error('Error saving report to Supabase:', err);
+      }
+    }
+  };
+
+  const toggleMedication = async (reminderId: string, time: 'Morning' | 'Afternoon' | 'Night') => {
+    const today = new Date().toISOString().split('T')[0];
+    let updatedReminders = medicationReminders.map(rem => {
+      if (rem.id === reminderId) {
+        const currentDateMap = rem.taken[today] || {};
+        const isCurrentTaken = !!currentDateMap[time];
+        return {
+          ...rem,
+          taken: {
+            ...rem.taken,
+            [today]: {
+              ...currentDateMap,
+              [time]: !isCurrentTaken
+            }
+          }
+        };
+      }
+      return rem;
+    });
+
+    setMedicationReminders(updatedReminders);
+
+    if (user) {
+      const targetReminder = updatedReminders.find(r => r.id === reminderId);
+      if (targetReminder) {
+        try {
+          await supabase
+            .from('medication_reminders')
+            .update({ taken: targetReminder.taken })
+            .eq('id', reminderId)
+            .eq('user_id', user.id);
+        } catch (err) {
+          console.error('Error syncing medication reminder to Supabase:', err);
+        }
+      }
+    }
+  };
+
+  const addAppointment = async (appointment: Omit<Appointment, 'id'>) => {
+    const newId = `a${Date.now()}`;
+    const newAppointment: Appointment = { id: newId, ...appointment };
+
+    const memberName = members.find(m => m.id === appointment.memberId)?.name || 'Family member';
+    const notifItem = {
+      id: `n${Date.now()}`,
+      title: 'New Appointment Scheduled',
+      message: `${memberName} has an appointment with ${appointment.doctor} on ${appointment.date}.`,
+      date: new Date().toISOString().split('T')[0],
+      read: false,
+      type: 'appointment'
+    };
+
+    setAppointments(prev => [...prev, newAppointment]);
+    setNotifications(prev => [notifItem, ...prev]);
+
+    if (user) {
+      try {
+        await supabase.from('appointments').insert([{
+          user_id: user.id,
+          member_id: appointment.memberId,
+          doctor: appointment.doctor,
+          specialty: appointment.specialty,
+          hospital: appointment.hospital,
+          date: appointment.date,
+          time: appointment.time,
+          notes: appointment.notes,
+          status: appointment.status
+        }]);
+
+        await supabase.from('notifications').insert([{
+          user_id: user.id,
+          title: notifItem.title,
+          message: notifItem.message,
+          date: notifItem.date,
+          read: false,
+          type: 'appointment'
+        }]);
+      } catch (err) {
+        console.error('Error adding appointment to Supabase:', err);
+      }
+    }
+  };
+
+  const askAI = async (text: string) => {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const userMsgId = `c_${Date.now()}`;
+    
+    setChatMessages(prev => [...prev, {
+      id: userMsgId,
+      sender: 'user',
+      text,
+      timestamp: timeStr,
+      attachments: [],
+      clinicalCards: []
+    }]);
+
+    if (user) {
+      try {
+        await supabase.from('chat_messages').insert([{
+          user_id: user.id,
+          sender: 'user',
+          text,
+          timestamp: timeStr,
+          attachments: [],
+          clinical_cards: []
+        }]);
+      } catch (err) {
+        console.error('Error syncing user message:', err);
+      }
+    }
+
+    // AI response simulation with clinical RAG heuristics
+    setTimeout(async () => {
       let reply = '';
       let clinicalCards: ChatMessage['clinicalCards'] = undefined;
-
       const normText = text.toLowerCase();
 
-      // Check member name mentioned
       const mentionedMember = members.find(m =>
         normText.includes(m.name.toLowerCase()) ||
         (m.relation.toLowerCase().includes('father') && (normText.includes('dad') || normText.includes('eshwaraiah'))) ||
@@ -664,29 +967,72 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
         reply = `I have scanned the health catalog for **${target.name}** (${target.relation}). He/she is a **${target.age}** year old **${target.gender}** with **${target.bloodGroup}** blood group.\n\n* **Allergies**: ${target.allergies.join(', ') || 'None'}\n* **Chronic Conditions**: ${target.chronicDiseases.join(', ') || 'None'}\n* **Active Medications**: ${target.currentMedications.join('; ') || 'None'}\n\nIs there a specific detail, recent lab trend, or timeline event you'd like me to fetch?`;
       }
 
-      const assistantMsg: ChatMessage = {
-        id: `c_a_${Date.now()}`,
+      const asstMsgId = `c_asst_${Date.now()}`;
+      setChatMessages(prev => [...prev, {
+        id: asstMsgId,
         sender: 'assistant',
         text: reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        attachments: [],
         clinicalCards
-      };
+      }]);
 
-      setChatMessages(prev => [...prev, assistantMsg]);
-    }, 1200);
+      if (user) {
+        try {
+          await supabase.from('chat_messages').insert([{
+            user_id: user.id,
+            sender: 'assistant',
+            text: reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            attachments: [],
+            clinical_cards: clinicalCards || []
+          }]);
+        } catch (err) {
+          console.error('Error syncing assistant reply:', err);
+        }
+      }
+    }, 1000);
   };
 
-  const clearChat = () => {
-    setChatMessages([defaultChatHistory[0]]);
+  const clearChat = async () => {
+    setChatMessages([]);
+    if (user) {
+      try {
+        await supabase.from('chat_messages').delete().eq('user_id', user.id);
+      } catch (err) {
+        console.error('Error clearing chat history:', err);
+      }
+    }
   };
 
-  const markNotificationsAsRead = () => {
+  const markNotificationsAsRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    if (user) {
+      try {
+        await supabase.from('notifications').update({ read: true }).eq('user_id', user.id);
+      } catch (err) {
+        console.error('Error marking notifications as read:', err);
+      }
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setMembers(demoMembers);
+      setActiveMemberId('m1');
+    } catch (err) {
+      console.error('Error logging out:', err);
+    }
   };
 
   return (
     <FamilyStateContext.Provider
       value={{
+        user,
+        loading,
+        logout,
         members,
         activeMemberId,
         activeMember,

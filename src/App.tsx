@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { FamilyStateProvider } from './context/FamilyStateContext';
+import { FamilyStateProvider, useFamilyState } from './context/FamilyStateContext';
 import { DashboardLayout } from './layouts/DashboardLayout';
 
 // Pages
@@ -12,15 +12,10 @@ import { MemberProfile } from './pages/MemberProfile';
 import { AIChat } from './pages/AIChat';
 import { UploadReport } from './pages/UploadReport';
 import { FamilyManagement } from './pages/FamilyManagement';
-import { MedicalTimeline } from './pages/MedicalTimeline';
-import { Appointments } from './pages/Appointments';
-import { MedicationReminders } from './pages/MedicationReminders';
 import { EmergencySummary } from './pages/EmergencySummary';
-import { Settings } from './pages/Settings';
-import { Notifications } from './pages/Notifications';
+import { Todos } from './pages/Todos';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  // Mock login authorization guard
   return <DashboardLayout>{children}</DashboardLayout>;
 };
 
@@ -76,30 +71,6 @@ function App() {
             } 
           />
           <Route 
-            path="/timeline" 
-            element={
-              <ProtectedRoute>
-                <MedicalTimeline />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/appointments" 
-            element={
-              <ProtectedRoute>
-                <Appointments />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/reminders" 
-            element={
-              <ProtectedRoute>
-                <MedicationReminders />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
             path="/emergency" 
             element={
               <ProtectedRoute>
@@ -108,18 +79,10 @@ function App() {
             } 
           />
           <Route 
-            path="/settings" 
+            path="/todos" 
             element={
               <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/notifications" 
-            element={
-              <ProtectedRoute>
-                <Notifications />
+                <Todos />
               </ProtectedRoute>
             } 
           />

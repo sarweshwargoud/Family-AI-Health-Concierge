@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Sparkles, Mail, Lock, Eye, EyeOff, User, Home } from 'lucide-react';
+import { supabase } from '../utils/supabase/client';
 
 export const Register: React.FC = () => {
   const [name, setName] = useState('');
@@ -9,17 +10,32 @@ export const Register: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const navigate = useNavigate();
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API registration delay
-    setTimeout(() => {
-      setIsLoading(false);
+    setError(null);
+    try {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            family_name: familyName,
+          }
+        }
+      });
+      if (signUpError) throw signUpError;
       navigate('/dashboard');
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to register. Please check your details.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -49,6 +65,11 @@ export const Register: React.FC = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="bg-white dark:bg-slate-900 py-8 px-6 shadow-xl dark:shadow-none border border-slate-200/50 dark:border-slate-800 rounded-3xl sm:px-10">
           <form className="space-y-5" onSubmit={handleRegister}>
+            {error && (
+              <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold rounded-2xl leading-relaxed">
+                {error}
+              </div>
+            )}
             <div>
               <label htmlFor="name" className="block text-xs font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider mb-2">
                 Full Name
@@ -157,7 +178,7 @@ export const Register: React.FC = () => {
               </label>
             </div>
 
-            <div>
+            <div className="space-y-3">
               <button
                 type="submit"
                 disabled={isLoading}
@@ -165,6 +186,13 @@ export const Register: React.FC = () => {
               >
                 {isLoading ? 'Creating space...' : 'Register Workspace'}
               </button>
+
+              <Link
+                to="/dashboard"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold text-sm rounded-2xl transition-all shadow-sm"
+              >
+                <span>⚡ Instant Live Demo (No Login Required)</span>
+              </Link>
             </div>
           </form>
         </div>

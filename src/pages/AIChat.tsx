@@ -48,9 +48,9 @@ export const AIChat: React.FC = () => {
   // Suggested prompt pills
   const suggestions = [
     `What medications does ${activeMember.name.split(' ')[0]} take?`,
-    `Does ${activeMember.name.split(' ')[0]} have any drug allergies?`,
-    `Show emergency clinical details for ${activeMember.name.split(' ')[0]}.`,
-    `Review historical scan and blood reports.`
+    `Does ${activeMember.name.split(' ')[0]} have drug allergies?`,
+    `Show emergency card for ${activeMember.name.split(' ')[0]}`,
+    `Summarize last blood report of ${activeMember.name.split(' ')[0]}`
   ];
 
   // Capture search query from location params (e.g. from the search bar redirect)
@@ -111,21 +111,21 @@ export const AIChat: React.FC = () => {
         </button>
 
         <div className="flex-1 mt-6 overflow-y-auto space-y-2">
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-2 mb-2">Conversations</p>
-          <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs rounded-xl border border-emerald-550/10 cursor-pointer">
-            ✨ Clinical Retrieval Session
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-2 mb-2">Health Logs</p>
+          <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs rounded-xl border border-emerald-500/10 cursor-pointer">
+            ✨ Active Medical Retrieval
           </div>
-          <div className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold text-xs rounded-xl cursor-pointer">
-            Medication adherence logs
+          <div className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-550 dark:text-slate-400 font-semibold text-xs rounded-xl cursor-pointer">
+            Prescription Search
           </div>
-          <div className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold text-xs rounded-xl cursor-pointer">
-            Blood pressure trends check
+          <div className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-550 dark:text-slate-400 font-semibold text-xs rounded-xl cursor-pointer">
+            Allergy Checkups
           </div>
         </div>
 
-        <div className="p-2 bg-slate-100 dark:bg-slate-850 rounded-xl flex gap-2 items-center">
+        <div className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl flex gap-2 items-center">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[10px] text-slate-400 font-bold uppercase">RAG Engine: Connected</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">AI Status: Ready</span>
         </div>
       </div>
 

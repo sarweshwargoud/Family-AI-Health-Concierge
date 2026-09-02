@@ -1,27 +1,37 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Sparkles, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '../utils/supabase/client';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('robert.doe@familyhealth.ai');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API authorization delay
-    setTimeout(() => {
-      setIsLoading(false);
+    setError(null);
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authError) throw authError;
       navigate('/dashboard');
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign in. Please verify your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center py-12 px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-955 flex flex-col justify-center py-12 px-6 lg:px-8 relative overflow-hidden">
       
       {/* Decorative background grid and blurs */}
       <div className="absolute w-[400px] h-[400px] rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-[120px] top-1/4 left-1/3 -translate-x-1/2 -translate-y-1/2" />
@@ -47,6 +57,11 @@ export const Login: React.FC = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="bg-white dark:bg-slate-900 py-8 px-6 shadow-xl dark:shadow-none border border-slate-200/50 dark:border-slate-800 rounded-3xl sm:px-10">
           <form className="space-y-6" onSubmit={handleLogin}>
+            {error && (
+              <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold rounded-2xl leading-relaxed">
+                {error}
+              </div>
+            )}
             <div>
               <label htmlFor="email" className="block text-xs font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider mb-2">
                 Email Address
@@ -119,7 +134,7 @@ export const Login: React.FC = () => {
               </div>
             </div>
 
-            <div>
+            <div className="space-y-3">
               <button
                 type="submit"
                 disabled={isLoading}
@@ -127,6 +142,13 @@ export const Login: React.FC = () => {
               >
                 {isLoading ? 'Signing in...' : 'Sign in'}
               </button>
+
+              <Link
+                to="/dashboard"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold text-sm rounded-2xl transition-all shadow-sm"
+              >
+                <span>⚡ Instant Live Demo (No Login Required)</span>
+              </Link>
             </div>
           </form>
         </div>

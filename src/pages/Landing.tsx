@@ -80,9 +80,13 @@ export const Landing: React.FC = () => {
           </div>
           <span className="font-extrabold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">HealthConcierge</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <Link to="/dashboard" className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-emerald-500 transition-colors hidden sm:inline-block">Live Preview</Link>
           <Link to="/login" className="text-sm font-semibold hover:text-emerald-500 transition-colors">Sign In</Link>
-          <Link to="/register" className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-4 py-2 rounded-full shadow-md shadow-emerald-500/10 hover:shadow-lg transition-all">Get Started</Link>
+          <Link to="/dashboard" className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-4 py-2 rounded-full shadow-md shadow-emerald-500/10 hover:shadow-lg transition-all flex items-center gap-1.5">
+            <Play size={13} className="fill-current" />
+            <span>Launch Demo</span>
+          </Link>
         </div>
       </header>
 
@@ -103,13 +107,13 @@ export const Landing: React.FC = () => {
             A secure AI-powered dashboard that parses prescriptions, creates interactive medical timelines, and answers critical health history questions in emergencies. One login for the whole family.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Link to="/register" className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-8 py-4 rounded-2xl shadow-xl shadow-emerald-500/20 text-center flex items-center justify-center gap-2 hover:translate-y-[-2px] transition-all">
-              <span>Get Started</span>
+            <Link to="/dashboard" className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-8 py-4 rounded-2xl shadow-xl shadow-emerald-500/20 text-center flex items-center justify-center gap-2 hover:translate-y-[-2px] transition-all">
+              <span>Explore Live Demo</span>
               <ArrowRight size={18} />
             </Link>
-            <Link to="/login" className="bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 font-bold px-8 py-4 rounded-2xl text-center flex items-center justify-center gap-2 hover:translate-y-[-2px] transition-all">
-              <Play size={16} className="fill-current text-slate-500" />
-              <span>View Demo</span>
+            <Link to="/dashboard" className="bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 font-bold px-8 py-4 rounded-2xl text-center flex items-center justify-center gap-2 hover:translate-y-[-2px] transition-all">
+              <Play size={16} className="fill-current text-emerald-500" />
+              <span>View Demo (No Login)</span>
             </Link>
           </div>
         </div>
