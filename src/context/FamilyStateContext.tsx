@@ -482,12 +482,31 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [notifications, setNotifications] = useState<any[]>(demoNotifications);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
-  const activeMember = members.find(m => m.id === activeMemberId) || members[0] || demoMembers[0];
+  const fallbackEmptyMember: FamilyMember = {
+    id: '',
+    name: 'No Member Selected',
+    relation: 'Family',
+    age: 0,
+    dob: '',
+    gender: 'Other',
+    bloodGroup: 'N/A',
+    insuranceProvider: '',
+    insuranceId: '',
+    allergies: [],
+    chronicDiseases: [],
+    currentMedications: [],
+    height: '',
+    weight: '',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+    emergencyContact: { name: '', relation: '', phone: '' },
+    vaccinations: []
+  };
+
+  const activeMember = members.find(m => m.id === activeMemberId) || (members.length > 0 ? members[0] : fallbackEmptyMember);
 
   const handleUserSession = async (currentUser: User) => {
     try {
-      await checkAndSeedUserData(currentUser.id);
-
+      // Fetch genuine database records for the authenticated user
       const [
         { data: dbMembers },
         { data: dbReports },
@@ -497,12 +516,12 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
         { data: dbNotifications },
         { data: dbChat }
       ] = await Promise.all([
-        supabase.from('family_members').select('*').eq('user_id', currentUser.id),
-        supabase.from('medical_reports').select('*').eq('user_id', currentUser.id),
-        supabase.from('timeline_events').select('*').eq('user_id', currentUser.id),
+        supabase.from('family_members').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true }),
+        supabase.from('medical_reports').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }),
+        supabase.from('timeline_events').select('*').eq('user_id', currentUser.id).order('date', { ascending: false }),
         supabase.from('medication_reminders').select('*').eq('user_id', currentUser.id),
         supabase.from('appointments').select('*').eq('user_id', currentUser.id),
-        supabase.from('notifications').select('*').eq('user_id', currentUser.id),
+        supabase.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }),
         supabase.from('chat_messages').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true })
       ]);
 
@@ -527,73 +546,67 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
           vaccinations: m.vaccinations || []
         })));
         setActiveMemberId(dbMembers[0].id);
+      } else {
+        // Fresh user: start with empty list so they can add their family members from scratch
+        setMembers([]);
+        setActiveMemberId('');
       }
 
-      if (dbReports && dbReports.length > 0) {
-        setReports(dbReports.map(r => ({
-          id: r.id,
-          memberId: r.member_id,
-          title: r.title,
-          date: r.date,
-          category: r.category,
-          hospital: r.hospital,
-          doctor: r.doctor,
-          summary: r.summary,
-          extractedData: r.extracted_data || { diseases: [], medications: [] },
-          fileSize: r.file_size || '1 MB',
-          fileType: r.file_type || 'PDF'
-        })));
-      }
+      setReports(dbReports && dbReports.length > 0 ? dbReports.map(r => ({
+        id: r.id,
+        memberId: r.member_id,
+        title: r.title,
+        date: r.date,
+        category: r.category,
+        hospital: r.hospital,
+        doctor: r.doctor,
+        summary: r.summary,
+        extractedData: r.extracted_data || { diseases: [], medications: [] },
+        fileSize: r.file_size || '1 MB',
+        fileType: r.file_type || 'PDF'
+      })) : []);
 
-      if (dbTimeline && dbTimeline.length > 0) {
-        setTimelineEvents(dbTimeline.map(t => ({
-          id: t.id,
-          memberId: t.member_id,
-          date: t.date,
-          year: t.year,
-          title: t.title,
-          type: t.type,
-          description: t.description,
-          icon: t.icon
-        })));
-      }
+      setTimelineEvents(dbTimeline && dbTimeline.length > 0 ? dbTimeline.map(t => ({
+        id: t.id,
+        memberId: t.member_id,
+        date: t.date,
+        year: t.year,
+        title: t.title,
+        type: t.type,
+        description: t.description,
+        icon: t.icon
+      })) : []);
 
-      if (dbReminders && dbReminders.length > 0) {
-        setMedicationReminders(dbReminders.map(rem => ({
-          id: rem.id,
-          memberId: rem.member_id,
-          medicine: rem.medicine,
-          dosage: rem.dosage,
-          frequency: rem.frequency,
-          timing: rem.timing,
-          taken: rem.taken || {}
-        })));
-      }
+      setMedicationReminders(dbReminders && dbReminders.length > 0 ? dbReminders.map(rem => ({
+        id: rem.id,
+        memberId: rem.member_id,
+        medicine: rem.medicine,
+        dosage: rem.dosage,
+        frequency: rem.frequency,
+        timing: rem.timing,
+        taken: rem.taken || {}
+      })) : []);
 
-      if (dbAppointments && dbAppointments.length > 0) {
-        setAppointments(dbAppointments.map(a => ({
-          id: a.id,
-          memberId: a.member_id,
-          doctor: a.doctor,
-          specialty: a.specialty,
-          hospital: a.hospital,
-          date: a.date,
-          time: a.time,
-          notes: a.notes,
-          status: a.status
-        })));
-      }
+      setAppointments(dbAppointments && dbAppointments.length > 0 ? dbAppointments.map(a => ({
+        id: a.id,
+        memberId: a.member_id,
+        doctor: a.doctor,
+        specialty: a.specialty,
+        hospital: a.hospital,
+        date: a.date,
+        time: a.time,
+        notes: a.notes,
+        status: a.status
+      })) : []);
 
-      if (dbNotifications && dbNotifications.length > 0) {
-        setNotifications(dbNotifications.map(n => ({
-          id: n.id,
-          title: n.title,
-          message: n.message,
-          date: n.date,
-          read: n.read,
-          type: n.type
-        })));
-      }
+      setNotifications(dbNotifications && dbNotifications.length > 0 ? dbNotifications.map(n => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        date: n.date,
+        read: n.read,
+        type: n.type
+      })) : []);
 
       if (dbChat && dbChat.length > 0) {
         setChatMessages(dbChat.map(c => ({
@@ -604,6 +617,16 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
           attachments: c.attachments,
           clinicalCards: c.clinical_cards
         })));
+      } else {
+        const userName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'there';
+        setChatMessages([
+          {
+            id: 'welcome_init',
+            sender: 'assistant',
+            text: `Hello ${userName}! Welcome to your Family Health Concierge AI.\n\nTo begin, please add your family members in the Family Profiles section. Once enrolled, I will securely maintain and index their medical history, prescriptions, and emergency contacts for you.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
       }
     } catch (err) {
       console.error('Error fetching database records:', err);
@@ -677,27 +700,11 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const addMember = async (member: Omit<FamilyMember, 'id'>) => {
-    const newId = `m${Date.now()}`;
-    const newMember: FamilyMember = { id: newId, ...member };
-
-    setMembers(prev => [...prev, newMember]);
-    if (!activeMemberId) {
-      setActiveMemberId(newId);
-    }
-
-    const notifItem = {
-      id: `n${Date.now()}`,
-      title: 'New Member Added',
-      message: `${member.name} has been added as a family member (${member.relation}).`,
-      date: new Date().toISOString().split('T')[0],
-      read: false,
-      type: 'member'
-    };
-    setNotifications(prev => [notifItem, ...prev]);
+    let newId = `m${Date.now()}`;
 
     if (user) {
       try {
-        await supabase.from('family_members').insert([{
+        const { data, error } = await supabase.from('family_members').insert([{
           user_id: user.id,
           name: member.name,
           relation: member.relation,
@@ -715,13 +722,18 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
           avatar: member.avatar,
           emergency_contact: member.emergencyContact,
           vaccinations: member.vaccinations
-        }]);
+        }]).select().single();
+
+        if (error) throw error;
+        if (data && data.id) {
+          newId = data.id;
+        }
 
         await supabase.from('notifications').insert([{
           user_id: user.id,
-          title: notifItem.title,
-          message: notifItem.message,
-          date: notifItem.date,
+          title: 'New Member Added',
+          message: `${member.name} has been added as a family member (${member.relation}).`,
+          date: new Date().toISOString().split('T')[0],
           read: false,
           type: 'member'
         }]);
@@ -729,6 +741,20 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
         console.error('Error adding member to Supabase:', err);
       }
     }
+
+    const newMember: FamilyMember = { id: newId, ...member };
+    setMembers(prev => [...prev, newMember]);
+    setActiveMemberId(prev => (!prev || prev === '') ? newId : prev);
+
+    const notifItem = {
+      id: `n${Date.now()}`,
+      title: 'New Member Added',
+      message: `${member.name} has been added as a family member (${member.relation}).`,
+      date: new Date().toISOString().split('T')[0],
+      read: false,
+      type: 'member'
+    };
+    setNotifications(prev => [notifItem, ...prev]);
   };
 
   const updateMember = async (id: string, updatedData: Partial<FamilyMember>) => {
