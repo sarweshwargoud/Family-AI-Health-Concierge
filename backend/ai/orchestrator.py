@@ -6,12 +6,93 @@ from backend.ai.document_processing.extraction import data_extractor
 from backend.ai.agents.concierge_agent import concierge_agent
 from backend.ai.agents.emergency_agent import emergency_agent
 from backend.ai.agents.timeline_agent import timeline_agent
+from backend.ai.language.detector import detect_language
+from backend.ai.language.query_normalizer import normalize_query_to_english
+
+# ---------------------------------------------------------------------------
+# Multilingual member reference keywords
+# ---------------------------------------------------------------------------
+_FATHER_KEYWORDS = {
+    # English
+    "father", "dad", "papa", "daddy", "naan",
+    # Telugu / Tenglish
+    "నాన్న", "నాన్నగారు", "నాన", "nanna", "naana",
+    # Hindi / Hinglish
+    "पिताजी", "पापा", "पिता", "bapu", "pitaji", "pita",
+    # Tamil
+    "அப்பா", "appa",
+    # Kannada
+    "ಅಪ್ಪ", "appa",
+    # Malayalam
+    "അപ്പൻ", "achan",
+    # Bengali
+    "বাবা", "baba",
+    # Gujarati
+    "પિતાજી",
+    # Marathi
+    "बाबा", "बाबांना",
+    # Punjabi / Urdu
+    "ابا", "والد", "walid",
+}
+
+_MOTHER_KEYWORDS = {
+    # English
+    "mother", "mom", "mum", "mommy", "mama",
+    # Telugu / Tenglish
+    "అమ్మ", "అమ్మగారు", "amma",
+    # Hindi / Hinglish
+    "माँ", "माम", "माता", "maa", "mummy", "mummi",
+    # Tamil
+    "அம்மா",
+    # Kannada
+    "ಅಮ್ಮ",
+    # Malayalam
+    "അമ്മ",
+    # Bengali
+    "মা", "মাতা",
+    # Gujarati
+    "માતા",
+    # Marathi
+    "आई",
+    # Punjabi / Urdu
+    "امی", "والدہ", "walida",
+}
+
+_SISTER_KEYWORDS = {
+    # English
+    "sister", "sis", "didi",
+    # Telugu / Tenglish
+    "అక్క", "చెల్లి", "akka", "chelli",
+    # Hindi / Hinglish
+    "बहन", "दीदी", "behen", "behan",
+    # Tamil
+    "அக்கா", "தங்கை", "akka", "thangai",
+    # Kannada
+    "ಅಕ್ಕ", "ತಂಗಿ",
+    # Malayalam
+    "ചേച്ചി", "അനുജത്തി",
+    # Bengali
+    "দিদি", "বোন",
+    # Gujarati
+    "બહેન",
+    # Marathi
+    "बहीण", "ताई",
+}
+
+_SELF_KEYWORDS = {
+    "me", "myself", "i", "sarweshwar", "sarwesh",
+    "నేను", "నాకు",
+    "मैं", "मुझे", "मुझको",
+}
+
 
 class HealthAIOrchestrator:
     """
     Main entry point for all AI capabilities in the Family Health Concierge.
-    Orchestrates RAG retrieval, agent selection, OCR parsing, and emergency synthesis.
+    Orchestrates multilingual detection, RAG retrieval, agent selection,
+    OCR parsing, and emergency synthesis.
     """
+
     async def process_chat(
         self,
         query: str,
@@ -20,25 +101,37 @@ class HealthAIOrchestrator:
         family_members: List[Dict[str, Any]],
         conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
-        # 1. Resolve target family member from query mention or active default
+
+        # 1. Detect user query language
+        lang_code, lang_name = detect_language(query)
+        print(f"[Orchestrator] Detected language: {lang_name} ({lang_code})")
+
+        # 2. Translate query to English for RAG embedding (cross-lingual bridge)
+        english_query = await normalize_query_to_english(query, lang_code)
+        if english_query != query:
+            print(f"[Orchestrator] RAG query normalised → '{english_query}'")
+
+        # 3. Resolve target family member from multilingual query
         target_member = self._resolve_member(query, active_member_id, family_members)
         target_member_id = target_member.get("id", active_member_id)
 
-        # 2. Perform RAG semantic retrieval from vector database
+        # 4. Perform RAG semantic retrieval using the English-normalised query
         retrieved_contexts = await vector_store.search(
-            query=query,
+            query=english_query,
             user_id=user_id,
             member_id=target_member_id,
             top_k=4
         )
 
-        # 3. Execute Concierge Agent with grounded context
+        # 5. Execute Concierge Agent with grounded context + language info
         response = await concierge_agent.respond(
             query=query,
             target_member=target_member,
             retrieved_contexts=retrieved_contexts,
             family_members=family_members,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            lang_code=lang_code,
+            lang_name=lang_name,
         )
 
         return response
@@ -101,6 +194,9 @@ class HealthAIOrchestrator:
     ) -> Dict[str, Any]:
         return await emergency_agent.generate_summary(member, recent_reports, timeline_events)
 
+    # -----------------------------------------------------------------------
+    # Multilingual member resolution
+    # -----------------------------------------------------------------------
     def _resolve_member(
         self,
         query: str,
@@ -110,27 +206,39 @@ class HealthAIOrchestrator:
         if not family_members:
             return {"id": active_member_id, "name": "Family Member", "relation": "Self"}
 
-        q_low = query.lower()
+        q_lower = query.lower()
+        # Preserve original for Unicode keyword matching
+        q_orig = query
 
-        # Check for direct name or relation match
+        # Check direct name match first (most specific)
         for member in family_members:
             m_name = member.get("name", "").lower()
-            m_rel = member.get("relation", "").lower()
-
-            if m_name and m_name in q_low:
+            if m_name and m_name in q_lower:
                 return member
-            if "father" in m_rel or "dad" in m_rel:
-                if "dad" in q_low or "father" in q_low or "eshwaraiah" in q_low:
-                    return member
-            if "mother" in m_rel or "mom" in m_rel:
-                if "mom" in q_low or "mother" in q_low or "suvarna" in q_low:
-                    return member
-            if "sister" in m_rel:
-                if "sister" in q_low or "gayathri" in q_low or "bhuvaneshwari" in q_low:
-                    return member
-            if "son" in m_rel or "self" in m_rel:
-                if "sarweshwar" in q_low or "myself" in q_low or "me" in q_low.split():
-                    return member
+
+        # Check multilingual relation keywords
+        def _query_contains(keywords: set) -> bool:
+            """Return True if any keyword appears in the query (case-insensitive)."""
+            for kw in keywords:
+                if kw in q_orig or kw in q_lower:
+                    return True
+            return False
+
+        father_match = _query_contains(_FATHER_KEYWORDS) or "eshwaraiah" in q_lower
+        mother_match = _query_contains(_MOTHER_KEYWORDS) or "suvarna" in q_lower
+        sister_match = _query_contains(_SISTER_KEYWORDS) or "gayathri" in q_lower or "bhuvaneshwari" in q_lower
+        self_match   = _query_contains(_SELF_KEYWORDS)
+
+        for member in family_members:
+            rel = member.get("relation", "").lower()
+            if father_match and ("father" in rel or "dad" in rel):
+                return member
+            if mother_match and ("mother" in rel or "mom" in rel):
+                return member
+            if sister_match and "sister" in rel:
+                return member
+            if self_match and ("son" in rel or "self" in rel):
+                return member
 
         # Default to active member
         for member in family_members:
@@ -138,5 +246,6 @@ class HealthAIOrchestrator:
                 return member
 
         return family_members[0]
+
 
 ai_orchestrator = HealthAIOrchestrator()
