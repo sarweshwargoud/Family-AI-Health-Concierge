@@ -5,6 +5,7 @@ import {
   AlertCircle, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { pythonAI } from '../utils/api';
 
 export const UploadReport: React.FC = () => {
   const { uploadReport, activeMember, members, reports } = useFamilyState();
@@ -20,11 +21,11 @@ export const UploadReport: React.FC = () => {
   const activeMemberReports = reports.filter(r => r.memberId === selectedMemberId);
 
   const steps = [
-    'Reading document byte blocks...',
-    'Performing clinical OCR text recognition...',
-    'Extracting diagnoses, medicines, and metrics...',
-    'Verifying drug allergies with safety index...',
-    'Cataloging knowledge embeddings in vector database...'
+    'Transmitting document to Python AI backend...',
+    'Running Optical Character Recognition (OCR)...',
+    'Extracting diagnoses, medicines, and metrics via Gemini...',
+    'Generating vector embeddings & RAG indexing...',
+    'Validating structured clinical summary...'
   ];
 
   const handleDrag = (e: React.DragEvent) => {
@@ -53,27 +54,34 @@ export const UploadReport: React.FC = () => {
     }
   };
 
-  const processFile = (file: File) => {
-    setFile(file);
+  const processFile = async (selectedFile: File) => {
+    setFile(selectedFile);
     setIsProcessing(true);
     setProcessingStep(0);
     setParsedData(null);
 
-    // Simulate multi-phase OCR extraction pipeline
+    // Progress animation ticker
     const interval = setInterval(() => {
-      setProcessingStep(prev => {
-        if (prev >= steps.length - 1) {
-          clearInterval(interval);
-          finishProcessing(file);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 1000);
+      setProcessingStep(prev => (prev < steps.length - 1 ? prev + 1 : prev));
+    }, 600);
+
+    try {
+      // Call Python FastAPI OCR Service
+      const result = await pythonAI.processDocument(selectedFile, selectedMemberId || 'm1');
+      clearInterval(interval);
+      setProcessingStep(steps.length - 1);
+      setParsedData(result.data);
+    } catch (err) {
+      console.warn('[UploadReport] Python backend fallback:', err);
+      clearInterval(interval);
+      fallbackProcessing(selectedFile);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const finishProcessing = (file: File) => {
-    const fileNameLower = file.name.toLowerCase();
+  const fallbackProcessing = (fileObj: File) => {
+    const fileNameLower = fileObj.name.toLowerCase();
     
     let title = 'Clinical Diagnostic Summary';
     let category: any = 'Other';
@@ -122,10 +130,9 @@ export const UploadReport: React.FC = () => {
         medications,
         values
       },
-      fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+      fileSize: `${(fileObj.size / (1024 * 1024)).toFixed(1)} MB`,
       fileType: 'PDF'
     });
-    setIsProcessing(false);
   };
 
   const handleSave = () => {

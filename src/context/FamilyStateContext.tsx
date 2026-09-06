@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import { checkAndSeedUserData } from '../utils/supabase/seed';
+import { pythonAI } from '../utils/api';
 
 export interface FamilyMember {
   id: string;
@@ -1018,8 +1019,46 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
     }
 
-    // AI response simulation with clinical RAG heuristics
-    setTimeout(async () => {
+    // Call Python FastAPI AI Service
+    try {
+      const aiResponse = await pythonAI.chat({
+        query: text,
+        activeMemberId,
+        familyMembers: members,
+        conversationHistory: chatMessages.slice(-6)
+      });
+
+      const reply = aiResponse.reply;
+      const clinicalCards = aiResponse.clinicalCards;
+      const asstMsgId = `c_asst_${Date.now()}`;
+
+      setChatMessages(prev => [...prev, {
+        id: asstMsgId,
+        sender: 'assistant',
+        text: reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        attachments: [],
+        clinicalCards
+      }]);
+
+      if (user) {
+        try {
+          await supabase.from('chat_messages').insert([{
+            user_id: user.id,
+            sender: 'assistant',
+            text: reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            attachments: [],
+            clinical_cards: clinicalCards || []
+          }]);
+        } catch (err) {
+          console.error('Error syncing assistant reply:', err);
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[FamilyState] Python AI service fallback:', apiErr);
+
+      // Graceful fallback heuristics if server is unreachable
       let reply = '';
       let clinicalCards: ChatMessage['clinicalCards'] = undefined;
       const normText = text.toLowerCase();
@@ -1059,20 +1098,8 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
           ? target.allergies.map(a => `- ${a}`).join('\n')
           : 'No active drug, environmental, or food allergies recorded.';
         reply = `Here are the recorded allergies for **${target.name}**:\n\n${allergiesList}\n\n⚠️ **Clinical Note**: Make sure emergency personnel are alerted to these agents before prescribing new medications.`;
-      } else if (normText.includes('timeline') || normText.includes('history') || normText.includes('surgery')) {
-        const memberEvents = timelineEvents.filter(e => e.memberId === target.id);
-        const timelineList = memberEvents.length > 0
-          ? memberEvents.map(e => `* **${e.year}** - ${e.title}: ${e.description}`).join('\n')
-          : 'No historical health events on the timeline yet.';
-        reply = `Here is the medical timeline history of **${target.name}**:\n\n${timelineList}`;
-      } else if (normText.includes('report') || normText.includes('blood') || normText.includes('mri')) {
-        const memberReports = reports.filter(r => r.memberId === target.id);
-        const reportsList = memberReports.length > 0
-          ? memberReports.map(r => `* **${r.date}**: ${r.title} (${r.category}) from ${r.hospital} (Doctor: ${r.doctor})`).join('\n')
-          : 'No uploaded medical reports found for this member.';
-        reply = `Found the following medical documents and clinical extractions for **${target.name}**:\n\n${reportsList}\n\nI can perform deep queries on these test values if you specify.`;
       } else {
-        reply = `I have scanned the health catalog for **${target.name}** (${target.relation}). He/she is a **${target.age}** year old **${target.gender}** with **${target.bloodGroup}** blood group.\n\n* **Allergies**: ${target.allergies.join(', ') || 'None'}\n* **Chronic Conditions**: ${target.chronicDiseases.join(', ') || 'None'}\n* **Active Medications**: ${target.currentMedications.join('; ') || 'None'}\n\nIs there a specific detail, recent lab trend, or timeline event you'd like me to fetch?`;
+        reply = `I have scanned the health catalog for **${target.name}** (${target.relation}). He/she is a **${target.age}** year old **${target.gender}** with **${target.bloodGroup}** blood group.\n\n* **Allergies**: ${target.allergies.join(', ') || 'None'}\n* **Chronic Conditions**: ${target.chronicDiseases.join(', ') || 'None'}\n* **Active Medications**: ${target.currentMedications.join('; ') || 'None'}`;
       }
 
       const asstMsgId = `c_asst_${Date.now()}`;
@@ -1084,22 +1111,7 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
         attachments: [],
         clinicalCards
       }]);
-
-      if (user) {
-        try {
-          await supabase.from('chat_messages').insert([{
-            user_id: user.id,
-            sender: 'assistant',
-            text: reply,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            attachments: [],
-            clinical_cards: clinicalCards || []
-          }]);
-        } catch (err) {
-          console.error('Error syncing assistant reply:', err);
-        }
-      }
-    }, 1000);
+    }
   };
 
   const clearChat = async () => {

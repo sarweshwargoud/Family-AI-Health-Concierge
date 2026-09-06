@@ -5,9 +5,10 @@ import {
   Heart, Pill, Info, Share2, Check
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { pythonAI } from '../utils/api';
 
 export const EmergencySummary: React.FC = () => {
-  const { activeMember, members, setActiveMemberId } = useFamilyState();
+  const { activeMember, members, setActiveMemberId, reports, timelineEvents } = useFamilyState();
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -15,24 +16,45 @@ export const EmergencySummary: React.FC = () => {
     window.print();
   };
 
-  const handleMockDownload = () => {
+  const handleMockDownload = async () => {
     setIsExporting(true);
-    setTimeout(() => {
+    try {
+      await pythonAI.generateEmergencySummary({
+        member: activeMember,
+        recentReports: reports.filter(r => r.memberId === activeMember.id),
+        timelineEvents: timelineEvents.filter(t => t.memberId === activeMember.id)
+      });
+    } catch (err) {
+      console.warn('[EmergencySummary] Python backend warning:', err);
+    } finally {
       setIsExporting(false);
-      alert(`Emergency Clinical Card for ${activeMember.name} has been generated and saved as PDF.`);
-    }, 1500);
+      window.print();
+    }
   };
 
-  const handleCopyText = () => {
-    const textToCopy = `🚨 *EMERGENCY MEDICAL SUMMARY* 🚨
+  const handleCopyText = async () => {
+    let textToCopy = `🚨 *EMERGENCY MEDICAL SUMMARY* 🚨
 *Patient*: ${activeMember.name} (${activeMember.relation})
-*Blood Group*: O+ (🩸 ${activeMember.bloodGroup})
+*Blood Group*: 🩸 ${activeMember.bloodGroup}
 *Age / Gender*: ${activeMember.age} years / ${activeMember.gender}
 *Allergies (CRITICAL)*: ${activeMember.allergies.join(', ') || 'None Known'}
 *Chronic Conditions*: ${activeMember.chronicDiseases.join(', ') || 'None'}
 *Active Medications*: ${activeMember.currentMedications.join('; ') || 'None'}
 *Emergency Contact*: ${activeMember.emergencyContact.name} (${activeMember.emergencyContact.relation}) - ${activeMember.emergencyContact.phone}
-_Shared via HealthConcierge Family AI_`;
+_Shared via Family Health Concierge AI_`;
+
+    try {
+      const summaryResult = await pythonAI.generateEmergencySummary({
+        member: activeMember,
+        recentReports: reports.filter(r => r.memberId === activeMember.id),
+        timelineEvents: timelineEvents.filter(t => t.memberId === activeMember.id)
+      });
+      if (summaryResult?.data?.shareableText) {
+        textToCopy = summaryResult.data.shareableText;
+      }
+    } catch (err) {
+      console.warn('[EmergencySummary] Using fallback text format:', err);
+    }
 
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
