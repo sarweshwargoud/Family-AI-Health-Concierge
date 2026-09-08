@@ -1,8 +1,12 @@
 import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
-load_dotenv()
+# Always load .env from the backend/ directory, regardless of CWD
+_backend_dir = Path(__file__).parent
+load_dotenv(dotenv_path=_backend_dir / ".env")
+
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Family Health Concierge AI - Python AI/ML Service"
@@ -32,7 +36,7 @@ class Settings(BaseSettings):
     GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
 
     class Config:
-        env_file = ".env"
+        env_file = str(Path(__file__).resolve().parent / ".env")
         extra = "ignore"
 
 settings = Settings()
