@@ -20,17 +20,53 @@ class ConciergeAgent:
         target_member: Dict[str, Any],
         retrieved_contexts: List[Dict[str, Any]],
         family_members: List[Dict[str, Any]],
+        reports: Optional[List[Dict[str, Any]]] = None,
+        timeline_events: Optional[List[Dict[str, Any]]] = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         lang_code: str = "en",
         lang_name: str = "English",
     ) -> Dict[str, Any]:
+        member_id        = str(target_member.get("id", ""))
         member_name      = target_member.get("name", "Family Member")
         relation         = target_member.get("relation", "")
         blood_group      = target_member.get("bloodGroup") or target_member.get("blood_group", "O+")
-        allergies        = target_member.get("allergies", [])
-        chronic          = target_member.get("chronicDiseases") or target_member.get("chronic_diseases", [])
-        medications      = target_member.get("currentMedications") or target_member.get("current_medications", [])
         emergency_contact = target_member.get("emergencyContact") or target_member.get("emergency_contact", {})
+
+        def _clean_list(raw: Any) -> List[str]:
+            if not raw:
+                return []
+            if isinstance(raw, str):
+                raw = [raw]
+            res = []
+            for item in raw:
+                if not item:
+                    continue
+                s = str(item).strip()
+                if s.lower() in ("dontknow", "don't know", "dont know", "none", "n/a", "null", "undefined", ""):
+                    continue
+                res.append(s)
+            return res
+
+        allergies   = _clean_list(target_member.get("allergies", []))
+        chronic     = _clean_list(target_member.get("chronicDiseases") or target_member.get("chronic_diseases", []))
+        medications = _clean_list(target_member.get("currentMedications") or target_member.get("current_medications", []))
+
+        # ---------------------------------------------------------------
+        # Collect member-specific reports and timeline events
+        # ---------------------------------------------------------------
+        target_reports = []
+        if reports:
+            for r in reports:
+                r_mid = str(r.get("memberId") or r.get("member_id") or "")
+                if r_mid == member_id or (not member_id and r.get("title")):
+                    target_reports.append(r)
+
+        target_timeline = []
+        if timeline_events:
+            for t in timeline_events:
+                t_mid = str(t.get("memberId") or t.get("member_id") or "")
+                if t_mid == member_id:
+                    target_timeline.append(t)
 
         # ---------------------------------------------------------------
         # Build patient profile context block
@@ -38,20 +74,66 @@ class ConciergeAgent:
         context_str = f"""
 PATIENT PROFILE:
 - Name: {member_name} ({relation})
-- Blood Group: {blood_group}
-- Known Allergies: {', '.join(allergies) if allergies else 'None Reported'}
-- Chronic Diagnoses: {', '.join(chronic) if chronic else 'None Reported'}
-- Active Medications: {', '.join(medications) if medications else 'None Reported'}
+- Blood Group: 🩸 {blood_group}
+- Known Allergies: {', '.join(allergies) if allergies else 'None Reported in Profile'}
+- Chronic Diagnoses: {', '.join(chronic) if chronic else 'None Reported in Profile'}
+- Active Medications: {', '.join(medications) if medications else 'None Reported in Profile'}
 - Emergency Contact: {emergency_contact.get('name', 'N/A')} ({emergency_contact.get('relation', 'Contact')}) - {emergency_contact.get('phone', 'N/A')}
-
-RETRIEVED CLINICAL DOCUMENTS & LABS:
 """
-        for i, ctx in enumerate(retrieved_contexts):
-            score = ctx.get("score", 0)
-            context_str += (
-                f"\n[Doc {i+1} — Member: {ctx.get('member_id', 'N/A')} "
-                f"(Relevance: {score:.2f})]:\n{ctx.get('text', '')}\n"
-            )
+
+        # ---------------------------------------------------------------
+        # Build clinical reports & lab investigations block
+        # ---------------------------------------------------------------
+        if target_reports:
+            context_str += "\nCLINICAL REPORTS & LAB INVESTIGATIONS (VERIFIED RECORDS):\n"
+            for i, rep in enumerate(target_reports):
+                title = rep.get("title", "Diagnostic Report")
+                cat = rep.get("category", "General")
+                date = rep.get("date", "N/A")
+                hosp = rep.get("hospital", "Medical Facility")
+                doc = rep.get("doctor", "Physician")
+                summary = rep.get("summary", "No narrative summary provided.")
+                ext = rep.get("extractedData") or rep.get("extracted_data") or {}
+
+                context_str += f"\n--- Report {i+1}: {title} ---\n"
+                context_str += f"- Category: {cat} | Date: {date}\n"
+                context_str += f"- Facility & Doctor: {hosp} (Attending: {doc})\n"
+                context_str += f"- Clinical Summary: {summary}\n"
+
+                if isinstance(ext, dict):
+                    ext_diseases = _clean_list(ext.get("diseases", []))
+                    ext_meds = _clean_list(ext.get("medications", []))
+                    ext_vals = ext.get("values", {})
+
+                    if ext_diseases:
+                        context_str += f"- Diagnosed Conditions: {', '.join(ext_diseases)}\n"
+                    if ext_meds:
+                        context_str += f"- Prescribed Medications: {', '.join(ext_meds)}\n"
+                    if ext_vals and isinstance(ext_vals, dict):
+                        context_str += "- Measured Biomarkers & Lab Values:\n"
+                        for vk, vv in ext_vals.items():
+                            context_str += f"  * {vk}: {vv}\n"
+        else:
+            context_str += "\nCLINICAL REPORTS & LAB INVESTIGATIONS:\nNo uploaded lab or hospital reports recorded yet for this member.\n"
+
+        # ---------------------------------------------------------------
+        # Build timeline context block
+        # ---------------------------------------------------------------
+        if target_timeline:
+            context_str += "\nMEDICAL TIMELINE EVENTS:\n"
+            for ev in target_timeline:
+                context_str += f"- [{ev.get('year', '') or ev.get('date', '')}] ({ev.get('type', 'event').upper()}): {ev.get('title', '')} — {ev.get('description', '')}\n"
+
+        # ---------------------------------------------------------------
+        # Build semantic search context block
+        # ---------------------------------------------------------------
+        if retrieved_contexts:
+            context_str += "\nADDITIONAL RELEVANT DOCUMENT EXCERPTS (RAG):\n"
+            for i, ctx in enumerate(retrieved_contexts):
+                score = ctx.get("score", 0)
+                context_str += (
+                    f"[Excerpt {i+1} — Relevance: {score:.2f}]:\n{ctx.get('text', '')}\n"
+                )
 
         # ---------------------------------------------------------------
         # Build language-aware system instruction
@@ -72,17 +154,23 @@ RETRIEVED CLINICAL DOCUMENTS & LABS:
 
         system_instruction = (
             "You are the 'Family Health Concierge AI', an expert, empathetic medical information "
-            "retrieval assistant. "
-            "Your job is to organize, search, and clearly present verified patient history from "
-            "their stored medical records.\n"
+            "retrieval assistant powered by Gemini. "
+            "Your job is to organize, synthesize, and clearly present verified patient history from "
+            "their stored medical records, diagnostic lab panels, and health profiles.\n"
             "CRITICAL RULES:\n"
-            "1. Ground all answers strictly in the patient's verified profile and retrieved "
-            "document records.\n"
-            "2. DO NOT diagnose medical conditions or prescribe new medications/treatments.\n"
-            "3. If information is not in the records, state clearly that it is not documented "
-            "rather than inventing it.\n"
+            "1. Ground all answers strictly in the patient's verified profile, clinical reports, "
+            "lab biomarker values, and retrieved document records.\n"
+            "2. When asked for a medical summary, health overview, or test results of a member, "
+            "provide a thorough, well-structured synthesis highlighting:\n"
+            "   - Profile vitals (Blood group, documented allergies, emergency contact)\n"
+            "   - Specific lab reports on file (report title, date, testing facility, clinical summary)\n"
+            "   - Biomarkers and values measured (e.g. cholesterol levels, glucose, HbA1c, etc.)\n"
+            "   - Documented diagnoses or findings\n"
+            "   - Active or prescribed medications\n"
+            "3. DO NOT fabricate or hallucinate medical information. If an item is truly not present, "
+            "accurately state that it is not documented.\n"
             "4. Highlight critical drug allergies with ⚠️ warnings and blood groups with 🩸 icons.\n"
-            "5. Maintain a professional, comforting, concise tone."
+            "5. Maintain a professional, comforting, concise tone with clean markdown formatting."
             + lang_instruction
         )
 
@@ -92,7 +180,7 @@ RETRIEVED CLINICAL DOCUMENTS & LABS:
 USER QUESTION:
 "{query}"
 
-Please answer the user's question clearly, formatting key lists (medications, allergies, timeline points) in clean markdown.
+Please provide a clear, comprehensive, empathetic response based on the patient's verified clinical records and profile. Format key lists in clean markdown.
 """
 
         # ---------------------------------------------------------------

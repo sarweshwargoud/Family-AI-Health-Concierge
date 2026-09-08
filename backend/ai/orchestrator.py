@@ -99,23 +99,29 @@ class HealthAIOrchestrator:
         user_id: str,
         active_member_id: str,
         family_members: List[Dict[str, Any]],
+        reports: Optional[List[Dict[str, Any]]] = None,
+        timeline_events: Optional[List[Dict[str, Any]]] = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
 
-        # 1. Detect user query language
+        # 1. Index any medical reports provided in the request into vector store
+        if reports:
+            await vector_store.index_reports(reports, user_id=user_id)
+
+        # 2. Detect user query language
         lang_code, lang_name = detect_language(query)
         print(f"[Orchestrator] Detected language: {lang_name} ({lang_code})")
 
-        # 2. Translate query to English for RAG embedding (cross-lingual bridge)
+        # 3. Translate query to English for RAG embedding (cross-lingual bridge)
         english_query = await normalize_query_to_english(query, lang_code)
         if english_query != query:
             print(f"[Orchestrator] RAG query normalised → '{english_query}'")
 
-        # 3. Resolve target family member from multilingual query
+        # 4. Resolve target family member from multilingual query
         target_member = self._resolve_member(query, active_member_id, family_members)
         target_member_id = target_member.get("id", active_member_id)
 
-        # 4. Perform RAG semantic retrieval using the English-normalised query
+        # 5. Perform RAG semantic retrieval using the English-normalised query
         retrieved_contexts = await vector_store.search(
             query=english_query,
             user_id=user_id,
@@ -123,12 +129,14 @@ class HealthAIOrchestrator:
             top_k=4
         )
 
-        # 5. Execute Concierge Agent with grounded context + language info
+        # 6. Execute Concierge Agent with grounded context + reports + language info
         response = await concierge_agent.respond(
             query=query,
             target_member=target_member,
             retrieved_contexts=retrieved_contexts,
             family_members=family_members,
+            reports=reports,
+            timeline_events=timeline_events,
             conversation_history=conversation_history,
             lang_code=lang_code,
             lang_name=lang_name,

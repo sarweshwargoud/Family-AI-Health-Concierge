@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     
     # Models
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
+    GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 
     class Config:
         env_file = str(Path(__file__).resolve().parent / ".env")

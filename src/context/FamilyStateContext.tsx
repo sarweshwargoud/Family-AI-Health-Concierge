@@ -1028,6 +1028,8 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
         query: text,
         activeMemberId,
         familyMembers: members,
+        reports,
+        timelineEvents,
         conversationHistory: chatMessages.slice(-6)
       });
 

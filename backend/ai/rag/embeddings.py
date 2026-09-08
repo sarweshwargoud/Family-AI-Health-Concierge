@@ -10,7 +10,7 @@ class EmbeddingService:
     using Google's text-embedding-004 model.
     """
     def __init__(self):
-        self.dimension = 768
+        self.dimension = 3072
 
     async def get_embedding(self, text: str) -> List[float]:
         if not text or not text.strip():
@@ -22,7 +22,10 @@ class EmbeddingService:
                     model=settings.GEMINI_EMBEDDING_MODEL,
                     contents=text
                 )
-                if response.embedding and response.embedding.values:
+                # google-genai SDK returns EmbedContentResponse with .embeddings list
+                if hasattr(response, "embeddings") and response.embeddings:
+                    return response.embeddings[0].values
+                elif hasattr(response, "embedding") and hasattr(response.embedding, "values"):
                     return response.embedding.values
             except Exception as e:
                 print(f"[EmbeddingService] Remote embedding error: {e}")

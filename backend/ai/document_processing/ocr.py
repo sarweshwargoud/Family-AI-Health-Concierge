@@ -12,23 +12,42 @@ class DocumentOCR:
     async def extract_text(self, file_bytes: bytes, filename: str, content_type: str) -> str:
         filename_lower = filename.lower()
         
-        # 1. Native PDF Text Extraction
-        if filename_lower.endswith(".pdf") or "pdf" in content_type:
+        # Determine exact supported MIME type for Gemini Multimodal
+        if filename_lower.endswith(".pdf") or (content_type and "pdf" in content_type):
+            mime = "application/pdf"
+        elif filename_lower.endswith(".png") or (content_type and "png" in content_type):
+            mime = "image/png"
+        elif filename_lower.endswith(".webp") or (content_type and "webp" in content_type):
+            mime = "image/webp"
+        elif filename_lower.endswith(".jpg") or filename_lower.endswith(".jpeg") or (content_type and "jpeg" in content_type):
+            mime = "image/jpeg"
+        else:
+            mime = content_type or "application/pdf"
+
+        # 1. Native PDF Text Extraction (for text-based PDFs)
+        if mime == "application/pdf":
             pdf_text = self._extract_pdf_text(file_bytes)
             if pdf_text and len(pdf_text.strip()) > 30:
+                print(f"[DocumentOCR] Successfully extracted {len(pdf_text)} chars natively with PyPDF")
                 return pdf_text
 
         # 2. Multimodal OCR with Gemini Vision for Scanned Images or Image PDFs
         if gemini_client.is_configured():
-            prompt = (
-                "You are an expert medical document OCR system. Perform high-precision text recognition "
-                "on this healthcare document. Transcribe all text, numbers, test names, reference ranges, "
-                "doctor names, prescription dosages, and dates exactly as they appear."
-            )
-            mime = content_type if content_type else ("application/pdf" if filename_lower.endswith(".pdf") else "image/jpeg")
-            ocr_result = await gemini_client.process_multimodal(prompt, file_bytes, mime)
-            if ocr_result and len(ocr_result.strip()) > 20:
-                return ocr_result
+            try:
+                print(f"[DocumentOCR] Processing multimodal OCR with Gemini for {filename} (MIME: {mime})")
+                prompt = (
+                    "You are an expert medical document OCR and health transcription system. "
+                    "Perform high-precision optical character recognition on this healthcare document. "
+                    "Extract and transcribe all text, patient names, clinical notes, diagnostic findings, "
+                    "laboratory biomarker test names, reference ranges, numerical values, units, physician names, "
+                    "hospital details, and prescription dosages exactly as they appear."
+                )
+                ocr_result = await gemini_client.process_multimodal(prompt, file_bytes, mime)
+                if ocr_result and len(ocr_result.strip()) > 20:
+                    print(f"[DocumentOCR] Gemini OCR returned {len(ocr_result)} chars")
+                    return ocr_result
+            except Exception as ocr_err:
+                print(f"[DocumentOCR] Multimodal OCR error: {ocr_err}")
 
         # 3. Fallback extraction heuristics for demo files
         return self._generate_fallback_ocr(filename)

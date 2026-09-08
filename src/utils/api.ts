@@ -22,6 +22,8 @@ export interface ChatRequestPayload {
   query: string;
   activeMemberId: string;
   familyMembers: any[];
+  reports?: any[];
+  timelineEvents?: any[];
   conversationHistory?: any[];
 }
 

@@ -10,6 +10,8 @@ class ChatRequest(BaseModel):
     query: str
     activeMemberId: str
     familyMembers: List[Dict[str, Any]]
+    reports: Optional[List[Dict[str, Any]]] = None
+    timelineEvents: Optional[List[Dict[str, Any]]] = None
     conversationHistory: Optional[List[Dict[str, Any]]] = None
 
 class ChatResponse(BaseModel):
@@ -28,6 +30,8 @@ async def chat_with_concierge(
         user_id=current_user.id,
         active_member_id=request.activeMemberId,
         family_members=request.familyMembers,
+        reports=request.reports,
+        timeline_events=request.timelineEvents,
         conversation_history=request.conversationHistory
     )
 
