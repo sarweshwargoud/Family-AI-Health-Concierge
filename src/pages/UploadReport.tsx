@@ -2,16 +2,19 @@ import React, { useState } from 'react';
 import { useFamilyState } from '../context/FamilyStateContext';
 import { 
   Upload, FileText, Sparkles, Check, 
-  AlertCircle, RefreshCw
+  AlertCircle, RefreshCw, WifiOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pythonAI } from '../utils/api';
+import { supabase } from '../utils/supabase/client';
 
 export const UploadReport: React.FC = () => {
   const { uploadReport, activeMember, members, reports } = useFamilyState();
   const [selectedMemberId, setSelectedMemberId] = useState(activeMember.id);
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // OCR Parsing States
   const [isProcessing, setIsProcessing] = useState(false);
@@ -54,11 +57,12 @@ export const UploadReport: React.FC = () => {
     }
   };
 
-  const processFile = async (selectedFile: File) => {
+  const processFile = async (selectedFile: File, usePreset = false) => {
     setFile(selectedFile);
     setIsProcessing(true);
     setProcessingStep(0);
     setParsedData(null);
+    setBackendError(null);
 
     // Progress animation ticker
     const interval = setInterval(() => {
@@ -70,11 +74,21 @@ export const UploadReport: React.FC = () => {
       const result = await pythonAI.processDocument(selectedFile, selectedMemberId || 'm1');
       clearInterval(interval);
       setProcessingStep(steps.length - 1);
-      setParsedData(result.data);
-    } catch (err) {
-      console.warn('[UploadReport] Python backend fallback:', err);
+      setParsedData({ ...result.data, _originalFile: selectedFile });
+    } catch (err: any) {
+      console.warn('[UploadReport] Python backend error:', err);
       clearInterval(interval);
-      fallbackProcessing(selectedFile);
+      if (usePreset) {
+        // Only use preset fallback when user clicked "Try preset" demo button
+        fallbackProcessing(selectedFile);
+      } else {
+        // Real file upload: show error to user instead of fake data
+        setBackendError(
+          'Could not reach the AI backend. Please ensure the Python server is running:\n' +
+          '.\\backend\\.venv\\Scripts\\uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload'
+        );
+        setFile(null);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -135,10 +149,43 @@ export const UploadReport: React.FC = () => {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!parsedData) return;
-    
-    uploadReport({
+    setIsSaving(true);
+
+    let fileUrl: string | undefined;
+    const originalFile: File | undefined = parsedData._originalFile;
+
+    // Upload actual file bytes to Supabase Storage
+    if (originalFile && originalFile.size > 0) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id || 'guest';
+        const safeFilename = originalFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `${userId}/${selectedMemberId}/${Date.now()}_${safeFilename}`;
+
+        const { data: storageData, error: storageErr } = await supabase.storage
+          .from('medical-documents')
+          .upload(storagePath, originalFile, {
+            contentType: originalFile.type || 'application/pdf',
+            upsert: false
+          });
+
+        if (!storageErr && storageData) {
+          const { data: urlData } = supabase.storage
+            .from('medical-documents')
+            .getPublicUrl(storagePath);
+          fileUrl = urlData?.publicUrl;
+          console.log('[UploadReport] File stored to Supabase:', storagePath);
+        } else {
+          console.warn('[UploadReport] Supabase Storage upload warning:', storageErr?.message);
+        }
+      } catch (storageEx) {
+        console.warn('[UploadReport] Storage exception (non-blocking):', storageEx);
+      }
+    }
+
+    await uploadReport({
       memberId: selectedMemberId,
       title: parsedData.title,
       date: parsedData.date,
@@ -148,11 +195,14 @@ export const UploadReport: React.FC = () => {
       summary: parsedData.summary,
       extractedData: parsedData.extractedData,
       fileSize: parsedData.fileSize,
-      fileType: parsedData.fileType
+      fileType: parsedData.fileType,
+      fileUrl
     });
 
+    setIsSaving(false);
     setFile(null);
     setParsedData(null);
+    setBackendError(null);
   };
 
   return (
@@ -223,7 +273,7 @@ export const UploadReport: React.FC = () => {
               <div className="flex flex-col gap-2">
                 <button
                   type="button"
-                  onClick={() => processFile(new File([""], "blood_test_report.pdf", { type: "application/pdf" }))}
+                  onClick={() => processFile(new File([""], "blood_test_report.pdf", { type: "application/pdf" }), true)}
                   className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-emerald-50 dark:bg-slate-800/40 dark:hover:bg-emerald-500/10 border border-slate-200/50 dark:border-slate-800 rounded-xl text-left text-xs font-bold text-slate-755 dark:text-slate-300 transition-colors"
                 >
                   <span>📄 blood_test_report.pdf (Metabolic/Sugar Panel)</span>
@@ -231,7 +281,7 @@ export const UploadReport: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => processFile(new File([""], "hypertension_prescription.png", { type: "image/png" }))}
+                  onClick={() => processFile(new File([""], "hypertension_prescription.png", { type: "image/png" }), true)}
                   className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-emerald-55 dark:bg-slate-800/40 dark:hover:bg-emerald-500/10 border border-slate-200/50 dark:border-slate-800 rounded-xl text-left text-xs font-bold text-slate-755 dark:text-slate-300 transition-colors"
                 >
                   <span>🖼️ hypertension_prescription.png (Doctor Rx Card)</span>
@@ -253,7 +303,35 @@ export const UploadReport: React.FC = () => {
         {/* OCR Result Display */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-[32px] shadow-sm min-h-[300px] flex flex-col justify-center">
           <AnimatePresence mode="wait">
-            {!isProcessing && !parsedData && (
+
+            {/* Backend offline error */}
+            {backendError && !isProcessing && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="p-5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl space-y-3"
+              >
+                <div className="flex items-center gap-2">
+                  <WifiOff className="text-red-500 flex-shrink-0" size={18} />
+                  <h4 className="text-sm font-bold text-red-700 dark:text-red-400">AI Backend Offline</h4>
+                </div>
+                <p className="text-xs text-red-600 dark:text-red-300 leading-relaxed font-semibold">
+                  The Python AI service is not reachable. Real OCR extraction requires the backend to be running.
+                </p>
+                <pre className="text-[10px] bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 p-3 rounded-xl overflow-x-auto font-mono">
+{`.\\backend\\.venv\\Scripts\\uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload`}
+                </pre>
+                <button
+                  onClick={() => setBackendError(null)}
+                  className="text-xs font-bold text-red-600 hover:text-red-800 dark:text-red-400 underline"
+                >
+                  Dismiss
+                </button>
+              </motion.div>
+            )}
+
+            {!isProcessing && !parsedData && !backendError && (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -380,10 +458,11 @@ export const UploadReport: React.FC = () => {
                   </button>
                   <button
                     onClick={handleSave}
-                    className="flex-1 py-3 text-xs font-bold rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white transition-colors flex items-center justify-center gap-2 cursor-pointer font-bold"
+                    disabled={isSaving}
+                    className="flex-1 py-3 text-xs font-bold rounded-2xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-400 text-white transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Check size={16} />
-                    <span>Save to Profile</span>
+                    {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Check size={16} />}
+                    <span>{isSaving ? 'Saving...' : 'Save to Profile'}</span>
                   </button>
                 </div>
               </motion.div>

@@ -40,6 +40,7 @@ export interface MedicalReport {
   };
   fileSize: string;
   fileType: string;
+  fileUrl?: string;
 }
 
 export interface TimelineEvent {
@@ -564,7 +565,8 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
         summary: r.summary,
         extractedData: r.extracted_data || { diseases: [], medications: [] },
         fileSize: r.file_size || '1 MB',
-        fileType: r.file_type || 'PDF'
+        fileType: r.file_type || 'PDF',
+        fileUrl: r.file_url || undefined
       })) : []);
 
       setTimelineEvents(dbTimeline && dbTimeline.length > 0 ? dbTimeline.map(t => ({
@@ -880,7 +882,8 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
           summary: report.summary,
           extracted_data: report.extractedData,
           file_size: report.fileSize,
-          file_type: report.fileType
+          file_type: report.fileType,
+          file_url: report.fileUrl || null
         }]);
 
         await supabase.from('timeline_events').insert([{
@@ -1056,63 +1059,31 @@ export const FamilyStateProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }
       }
     } catch (apiErr) {
-      console.warn('[FamilyState] Python AI service fallback:', apiErr);
+      console.warn('[FamilyState] Python AI service unreachable:', apiErr);
 
-      // Graceful fallback heuristics if server is unreachable
-      let reply = '';
-      let clinicalCards: ChatMessage['clinicalCards'] = undefined;
-      const normText = text.toLowerCase();
+      // Show a clear "backend offline" message in chat instead of fake keyword responses
+      const offlineMsg = `⚠️ **AI Backend Offline**
 
-      const mentionedMember = members.find(m =>
-        normText.includes(m.name.toLowerCase()) ||
-        (m.relation.toLowerCase().includes('father') && (normText.includes('dad') || normText.includes('eshwaraiah'))) ||
-        (m.relation.toLowerCase().includes('mother') && (normText.includes('mom') || normText.includes('suvarna'))) ||
-        (m.relation.toLowerCase().includes('sister') && (normText.includes('gayathri') || normText.includes('bhuvaneshwari') || normText.includes('sister'))) ||
-        (m.relation.toLowerCase().includes('son') && (normText.includes('sarweshwar') || normText.includes('me')))
-      );
+The Python AI service is not reachable. Please start the backend server and try again:
 
-      const target = mentionedMember || activeMember;
+\`\`\`
+.\\backend\\.venv\\Scripts\\uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+\`\`\`
 
-      if (normText.includes('emergency') || normText.includes('summary')) {
-        reply = `🚨 **EMERGENCY SUMMARY EXTRACTED** for **${target.name}** (${target.relation}).\n\nI have generated a clinical summary outlining current diagnosis profiles, allergies, active medications, and urgent contacts. You can export this to a printable card.`;
-        clinicalCards = [
-          {
-            title: `Emergency Clinical Summary - ${target.name}`,
-            items: [
-              { label: 'Relation', value: target.relation },
-              { label: 'Blood Group', value: `🩸 ${target.bloodGroup}` },
-              { label: 'Allergies', value: target.allergies.join(', ') || 'None Known' },
-              { label: 'Chronic Conditions', value: target.chronicDiseases.join(', ') || 'None' },
-              { label: 'Active Medications', value: target.currentMedications.join('; ') || 'None' },
-              { label: 'Emergency Contact', value: `${target.emergencyContact.name} (${target.emergencyContact.relation}) - ${target.emergencyContact.phone}` }
-            ]
-          }
-        ];
-      } else if (normText.includes('medication') || normText.includes('medicine') || normText.includes('pill')) {
-        const medsList = target.currentMedications.length > 0
-          ? target.currentMedications.map(m => `- ${m}`).join('\n')
-          : 'No active medications documented.';
-        reply = `Here are the active medications currently recorded for **${target.name}**:\n\n${medsList}\n\n*Refilled & cross-checked with recent diagnostics.*`;
-      } else if (normText.includes('allergy') || normText.includes('allergies')) {
-        const allergiesList = target.allergies.length > 0
-          ? target.allergies.map(a => `- ${a}`).join('\n')
-          : 'No active drug, environmental, or food allergies recorded.';
-        reply = `Here are the recorded allergies for **${target.name}**:\n\n${allergiesList}\n\n⚠️ **Clinical Note**: Make sure emergency personnel are alerted to these agents before prescribing new medications.`;
-      } else {
-        reply = `I have scanned the health catalog for **${target.name}** (${target.relation}). He/she is a **${target.age}** year old **${target.gender}** with **${target.bloodGroup}** blood group.\n\n* **Allergies**: ${target.allergies.join(', ') || 'None'}\n* **Chronic Conditions**: ${target.chronicDiseases.join(', ') || 'None'}\n* **Active Medications**: ${target.currentMedications.join('; ') || 'None'}`;
-      }
+*Your question has been noted. Retry once the backend is running.*`;
 
-      const asstMsgId = `c_asst_${Date.now()}`;
+      const offlineMsgId = `c_offline_${Date.now()}`;
       setChatMessages(prev => [...prev, {
-        id: asstMsgId,
+        id: offlineMsgId,
         sender: 'assistant',
-        text: reply,
+        text: offlineMsg,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         attachments: [],
-        clinicalCards
+        clinicalCards: []
       }]);
     }
   };
+
 
   const clearChat = async () => {
     setChatMessages([]);
